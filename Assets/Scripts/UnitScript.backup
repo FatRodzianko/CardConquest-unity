@@ -1,0 +1,312 @@
+﻿using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class UnitScript : MonoBehaviour
+{
+    public bool currentlySelected = false;
+
+    [SerializeField]
+    public GameObject outline;
+    private List<GameObject> outlineObjects;
+    private GameObject unitManager;
+    private UnitManager unitManagerScript;
+    private Vector3 currentPosition;
+    
+    private Collider2D myCollider;
+    private Rigidbody2D myBody;
+
+    [SerializeField]
+    private LayerMask landLayer;
+    private Vector2 overlapA;
+    private Vector2 overlapB;
+
+    public GameObject currentLandOccupied;
+    public GameObject previouslyOccupiedLand;
+    private RaycastHit2D landBelow;
+
+    public bool placedDuringUnitPlacement = false;
+
+    public float totalXMoved;
+    public float totalYMoved;
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        outline = Instantiate(outline, transform.position, Quaternion.identity);
+        outline.transform.SetParent(gameObject.transform);
+        unitManager = GameObject.FindGameObjectWithTag("UnitManager");
+        unitManagerScript = unitManager.GetComponent<UnitManager>();
+        myCollider = GetComponent<Collider2D>();
+        myBody = GetComponent<Rigidbody2D>();
+        //currentLandOccupied = new GameObject("currentLandOccupied");
+
+        /*
+        if (myCollider.IsTouchingLayers(landLayer))
+        {
+            Debug.Log("Touching land");
+            CheckForLandBelow();
+        }
+        else 
+        {
+            Debug.Log("No land below");
+        }
+
+        
+        CheckForLandBelow();
+
+        //temporary for testing
+        currentPosition = currentLandOccupied.transform.position;
+        */
+        ClickedOn();
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+
+    }
+
+    public void ClickedOn()
+    {
+        if (currentlySelected)
+        {
+            outline.SetActive(true);
+            Debug.Log("Currently selected set to true. Activating outline.");
+            outline.transform.position = transform.position;
+            
+        }
+        else if (!currentlySelected)
+        {
+            if (outline.activeInHierarchy)
+            {
+                Debug.Log("Currently selected set to false. Deactivating outline");
+                outline.SetActive(false);
+            }
+        }
+    }
+    public bool CanMove(Vector3 newPosition, GameObject landUserClicked, int unitsToSend)
+    {
+        LandScript landScript = landUserClicked.GetComponent<LandScript>();
+        //if (landScript.multipleUnitsOnLand)
+        //{
+        //    int totalUnitsOnLand = landScript.infantryOnLand.Count + landScript.tanksOnLand.Count + unitsToSend;
+        //    if (totalUnitsOnLand > 5)
+        //    {
+        //        Debug.Log("Too many units on land to move.");
+        //        return false;
+        //    }
+        //}
+        int totalUnitsOnLand = landScript.infantryOnLand.Count + landScript.tanksOnLand.Count + unitsToSend;
+        if (totalUnitsOnLand > 5)
+        {
+            Debug.Log("Too many units on land to move.");
+            return false;
+        }
+        if (GameplayManager.instance.currentGamePhase == "UnitPlacement")
+        {
+            Debug.Log("Unit placement round movement");
+            return true;
+        }
+        else if ((Mathf.Abs(newPosition.x - currentPosition.x) <= 2.31f) && (Mathf.Abs(newPosition.y - currentPosition.y) < 3.01f))
+        {
+            float xDis = Mathf.Abs(newPosition.x - currentPosition.x);
+            float yDis = Mathf.Abs(newPosition.y - currentPosition.y);
+            currentPosition = newPosition;
+            Debug.Log("Unit can move. X distance: " + xDis.ToString() + " Y distance: " + yDis.ToString()); ;
+            return true;
+        }
+        else
+        {
+            float xDis = Mathf.Abs(newPosition.x - currentPosition.x);
+            float yDis = Mathf.Abs(newPosition.y - currentPosition.y);
+            Debug.Log("unit cannot move. X distance: " + xDis.ToString() + " Y distance: " + yDis.ToString());
+            return false;
+        }
+
+    }
+    public void CheckForLandBelow()
+    {
+        //overlapA = transform.position;
+        //overlapA.x -= myCollider.bounds.size.x * 0.5f;
+        //overlapA.y += myCollider.bounds.size.y * 0.5f;
+        //overlapB = transform.position;
+        //overlapB.x += myCollider.bounds.size.x * 0.5f; ;
+        //overlapB.y -= myCollider.bounds.size.y * 0.5f;
+
+        //if (Physics2D.OverlapArea(overlapA, overlapB, landLayer))
+        //{
+        //    Debug.Log("Above land");
+        //}
+
+        landBelow = Physics2D.Raycast(transform.position, Vector2.zero, Mathf.Infinity, landLayer);
+        if (landBelow.collider != null)
+        {
+            Debug.Log("Raycast hit on land");
+            LandScript landScript = landBelow.collider.GetComponent<LandScript>();
+
+            if (currentLandOccupied != landBelow.collider.gameObject)
+            {
+                Debug.Log("Unit moved to new land");
+                if (currentLandOccupied != null)
+                {
+                    if (gameObject.tag == "infantry")
+                    {
+                        Debug.Log("Removed infantry from previous land object at: " + currentLandOccupied.transform.position.x.ToString() + "," + currentLandOccupied.transform.position.y.ToString());
+                        currentLandOccupied.GetComponent<LandScript>().infantryOnLand.Remove(gameObject);
+                        currentLandOccupied.GetComponent<LandScript>().UpdateUnitText();
+                        
+                    }
+                    else if (gameObject.tag == "tank")
+                    {
+                        Debug.Log("Removed tank from previous land object at: " + currentLandOccupied.transform.position.x.ToString() + "," + currentLandOccupied.transform.position.y.ToString());
+                        currentLandOccupied.GetComponent<LandScript>().tanksOnLand.Remove(gameObject);
+                        Debug.Log("UpdateUnitText() for tanks");
+                        currentLandOccupied.GetComponent<LandScript>().UpdateUnitText();
+                    }
+                    // Remove the land highlight when a unit moves
+                    currentLandOccupied.GetComponent<LandScript>().RemoveHighlightLandArea();
+                }
+                else 
+                {
+                    //currentLandOccupied = new GameObject("currentLandOccupied");
+                }
+                // Save the first land the unit was on?
+                //previouslyOccupiedLand = currentLandOccupied;
+                currentLandOccupied = landBelow.collider.gameObject;
+            }
+
+            
+            if (gameObject.tag == "infantry")
+            {
+                landScript.infantryOnLand.Add(gameObject);
+                Debug.Log("Added infantry unit to land object at: " + currentLandOccupied.transform.position.x.ToString() + "," + currentLandOccupied.transform.position.y.ToString());
+                if (landScript.infantryOnLand.Count > 1)
+                {
+                    landScript.MultipleUnitsUIText("infantry");
+                    Debug.Log("More than 1 infantry on land");
+                }
+            }
+            if (gameObject.tag == "tank")
+            {
+                landScript.tanksOnLand.Add(gameObject);
+                Debug.Log("Added tank unit to land object at: " + currentLandOccupied.transform.position.x.ToString() + "," + currentLandOccupied.transform.position.y.ToString());
+                if (landScript.tanksOnLand.Count > 1)
+                {
+                    landScript.MultipleUnitsUIText("tank");
+                    Debug.Log("More than 1 tank on land");
+                }
+            }
+            
+        }
+    }
+    public void CheckLandForRemainingSelectedUnits()
+    {
+        if (currentLandOccupied != null)
+        {
+            LandScript landScript = currentLandOccupied.GetComponent<LandScript>();
+            landScript.CheckForSelectedUnits();
+        }        
+    }
+    public bool CanAllSelectedUnitsMove(Vector3 newPosition, GameObject landUserClicked)
+    {
+        LandScript landScript = landUserClicked.GetComponent<LandScript>();
+        bool canMove = false;
+        int totalUnits = UnitManager.instance.unitsSelected.Count + landScript.tanksOnLand.Count + landScript.infantryOnLand.Count;
+        if (totalUnits > 5)
+        {
+            Debug.Log("Too many units to move.");
+            canMove = false;
+            return canMove;
+        }
+        if (GameplayManager.instance.currentGamePhase == "Unit Placement")
+        {
+            if (landScript.cannotPlaceHere)
+            {
+                Debug.Log("Can't place here. Too far from base.");
+                return false;
+            }
+            else if (!landScript.cannotPlaceHere)
+            {
+                Debug.Log("Unit placement round movement");
+                foreach (GameObject unit in UnitManager.instance.unitsSelected)
+                {
+                    UnitScript unitScript = unit.GetComponent<UnitScript>();
+                    unitScript.currentPosition = newPosition;
+                    unitScript.placedDuringUnitPlacement = true;
+                }
+                GameplayManager.instance.CheckIfAllUnitsHaveBeenPlaced();
+                return true;
+            }            
+        }
+        foreach (GameObject unit in UnitManager.instance.unitsSelected)
+        {
+            UnitScript unitScript = unit.GetComponent<UnitScript>();
+            if ((Mathf.Abs(newPosition.x - unitScript.currentPosition.x) <= 2.31f) && (Mathf.Abs(newPosition.y - unitScript.currentPosition.y) < 3.01f))
+            {
+                unitScript.totalXMoved += (newPosition.x - unitScript.currentPosition.x);
+                unitScript.totalYMoved += (newPosition.y - unitScript.currentPosition.y);
+                Debug.Log("Total X distance moved: " + unitScript.totalXMoved.ToString("0.00") + ". Total Y distance moved: " + unitScript.totalYMoved.ToString("0.00") + ".");
+
+                if (Mathf.Abs(totalXMoved) < 2.31f && Mathf.Abs(totalYMoved) < 3.01f)
+                {
+                    float xDis = Mathf.Abs(newPosition.x - unitScript.currentPosition.x);
+                    float yDis = Mathf.Abs(newPosition.y - unitScript.currentPosition.y);
+                    unitScript.currentPosition = newPosition;
+                    Debug.Log("Unit can move. X distance: " + xDis.ToString() + " Y distance: " + yDis.ToString());
+                    canMove = true;
+                }
+                else 
+                {
+                    Debug.Log("Unit moved more than one space this turn.");
+                    Debug.Log("FAILED Total X distance moved: " + unitScript.totalXMoved.ToString("0.00") + ". Total Y distance moved: " + unitScript.totalYMoved.ToString("0.00") + ".");
+                    unitScript.totalXMoved -= (newPosition.x - unitScript.currentPosition.x);
+                    unitScript.totalYMoved -= (newPosition.y - unitScript.currentPosition.y);
+                    canMove = false;
+                    return canMove;
+                }
+                
+            }
+            else
+            {
+                float xDis = Mathf.Abs(newPosition.x - unitScript.currentPosition.x);
+                float yDis = Mathf.Abs(newPosition.y - unitScript.currentPosition.y);
+                Debug.Log("unit cannot move. Cancelling all movement. X distance: " + xDis.ToString() + " Y distance: " + yDis.ToString());
+                canMove = false;
+                return canMove;
+            }
+        }
+        return canMove;
+    }
+    public void MoveUnit(GameObject LandToMoveTo)
+    {
+        if (currentLandOccupied != LandToMoveTo)
+        {
+            if (currentLandOccupied == LandToMoveTo)
+            {
+                Debug.Log("Same land");
+            }
+            Vector3 temp = LandToMoveTo.transform.position;
+            if (currentPosition != temp)
+            {
+                Debug.Log("current position does not match. Movement was reset. Resetting current position.");
+                currentPosition = temp;
+            }
+            //unitObj.transform.position = rayHitLand.collider.transform.position;
+            if (gameObject.tag == "tank")
+            {
+                temp.y += 0.5f;
+                gameObject.transform.position = temp;
+            }
+            else if (gameObject.tag == "infantry")
+            {
+                temp.y -= 0.5f;
+                gameObject.transform.position = temp;
+            }
+            // update the land the unit is "attached" to
+            CheckForLandBelow();
+        }
+    }
+
+ 
+}

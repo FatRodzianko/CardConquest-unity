@@ -1,0 +1,67 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 2
+  tags:
+  - UnitManager
+  - tank
+  - infantry
+  - PlayerUnitHolder
+  - PlayerBase
+  - LandHolder
+  - PlayerHand
+  - PlayerDiscard
+  - GamePlayer
+  - LocalGamePlayer
+  - Card
+  - GamePlayerHandButton
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - 
+  - Water
+  - UI
+  - 
+  - 
+  - Water-tile
+  - Land
+  - Units
+  - PlayerCards
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0
+  - name: Land
+    uniqueID: 770764835
+    locked: 0
+  - name: Units
+    uniqueID: 3749674089
+    locked: 0
+  - name: PlayerCards
+    uniqueID: 4188315737
+    locked: 0
+  - name: UI-text
+    uniqueID: 1220885767
+    locked: 0
