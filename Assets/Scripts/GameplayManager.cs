@@ -1046,6 +1046,8 @@ public class GameplayManager : NetworkBehaviour
                 UnitScript unitChildScript = unitChild.gameObject.GetComponent<UnitScript>();
                 if (unitChildScript.currentLandOccupied.GetComponent<NetworkIdentity>().netId != currentBattleSite)
                     unitChild.gameObject.SetActive(false);
+                else
+                    unitChild.gameObject.SetActive(true);
             }
         }
     }
@@ -1059,7 +1061,12 @@ public class GameplayManager : NetworkBehaviour
             {
                 landScript.HideUnitText();
                 landScript.HideBattleHighlight();
-            }            
+            }
+            else
+            {
+                landScript.UnHideUnitText();
+                landScript.UnHideBattleHighlight();
+            }
         }
     }
     public void ToggleSelectThisCardButton()
@@ -1115,7 +1122,7 @@ public class GameplayManager : NetworkBehaviour
             }
             else
             {
-                haveAllBattleScoresBeenSet = gamePlayerScript.updatedUnitPositionsForBattleSites;
+                haveAllBattleScoresBeenSet = gamePlayerScript.isPlayerBattleScoreSet;
             }
         }
         if (haveAllBattleScoresBeenSet)

@@ -139,25 +139,6 @@ public class MouseClickManager : MonoBehaviour
                 RaycastHit2D rayHitCard = Physics2D.Raycast(mousePosition2d, Vector2.zero, Mathf.Infinity, playerCardLayer);
                 if (rayHitCard.collider != null)
                 {
-                    /*if (rayHitCard.collider.gameObject.GetComponent<NetworkIdentity>().hasAuthority)
-                    {
-                        Card cardScript = rayHitCard.collider.gameObject.GetComponent<Card>();
-                        cardScript.CardClickedOn();
-                        if (cardSelected != rayHitCard.collider.gameObject && cardSelected)
-                        {
-                            Card cardSelectedScript = cardSelected.GetComponent<Card>();
-                            cardSelectedScript.CardClickedOn();
-                        }
-                        if (cardSelected == rayHitCard.collider.gameObject)
-                        {
-                            cardSelected = null;
-                        }
-                        else
-                        {
-                            cardSelected = rayHitCard.collider.gameObject;
-                        }
-                        
-                    }*/
                     SelectCardClicked(rayHitCard.collider.gameObject);
                 }
             }

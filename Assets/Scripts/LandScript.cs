@@ -566,4 +566,11 @@ public class LandScript : NetworkBehaviour
             battleOutlineObject.SetActive(false);
         }
     }
+    public void UnHideBattleHighlight()
+    {
+        if (battleOutlineObject)
+        {
+            battleOutlineObject.SetActive(true);
+        }
+    }
 }
