@@ -85,6 +85,9 @@ public class GameplayManager : NetworkBehaviour
     [SyncVar] public string reasonForWinning;
     [SyncVar(hook = nameof(HandleAreBattleResultsSet))] public bool areBattleResultsSet = false;
     private bool updateResultsPanelLocal = false;
+    [SyncVar] public int numberOfTanksLost;
+    [SyncVar] public int numberOfInfLost;
+    public SyncList<uint> unitNetIdsLost = new SyncList<uint>();
 
     [Header("Battle Results UI")]
     [SerializeField] private Text winnerName;
