@@ -144,16 +144,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0ceecc5abcdc0794aad215c415b12dab, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  currentlySelected: 0
+  syncMode: 0
+  syncInterval: 0.1
+  ownerPlayerName: 
+  ownerConnectionId: 0
+  ownerPlayerNumber: 0
   outline: {fileID: 1437130085098536343, guid: cb2bda952332580478927676cb7ed91d, type: 3}
+  currentlySelected: 0
+  currentLandOccupied: {fileID: 0}
+  previouslyOccupiedLand: {fileID: 0}
+  newPosition: {x: 0, y: 0, z: 0}
+  startingPosition: {x: 0, y: 0, z: 0}
   landLayer:
     serializedVersion: 2
     m_Bits: 512
-  currentLandOccupied: {fileID: 0}
-  previouslyOccupiedLand: {fileID: 0}
   placedDuringUnitPlacement: 0
-  totalXMoved: 0
-  totalYMoved: 0
+  canMoveFromServer: 0
+  unitDeadIconPrefab: {fileID: 2349079064743853517, guid: c326f0f8ce71aad41b11eecc3dc5333c,
+    type: 3}
 --- !u!114 &1645991684448780059
 MonoBehaviour:
   m_ObjectHideFlags: 0

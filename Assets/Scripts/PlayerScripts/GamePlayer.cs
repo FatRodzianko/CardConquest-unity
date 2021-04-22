@@ -803,6 +803,9 @@ public class GamePlayer : NetworkBehaviour
             GameplayManager.instance.winnerOfBattleName = player1.PlayerName;
             GameplayManager.instance.winnerOfBattlePlayerNumber = player1.playerNumber;
             GameplayManager.instance.winnerOfBattlePlayerConnId = player1.ConnectionId;
+            GameplayManager.instance.loserOfBattleName = player2.PlayerName;
+            GameplayManager.instance.loserOfBattlePlayerNumber = player2.playerNumber;
+            GameplayManager.instance.loserOfBattlePlayerConnId = player2.ConnectionId;
             GameplayManager.instance.reasonForWinning = "Battle Score";
 
             UnitsLostFromBattle(player1, player2);
@@ -813,6 +816,9 @@ public class GamePlayer : NetworkBehaviour
             GameplayManager.instance.winnerOfBattleName = player2.PlayerName;
             GameplayManager.instance.winnerOfBattlePlayerNumber = player2.playerNumber;
             GameplayManager.instance.winnerOfBattlePlayerConnId = player2.ConnectionId;
+            GameplayManager.instance.loserOfBattleName = player1.PlayerName;
+            GameplayManager.instance.loserOfBattlePlayerNumber = player1.playerNumber;
+            GameplayManager.instance.loserOfBattlePlayerConnId = player1.ConnectionId;
             GameplayManager.instance.reasonForWinning = "Battle Score";
 
             UnitsLostFromBattle(player2, player1);
@@ -826,6 +832,9 @@ public class GamePlayer : NetworkBehaviour
                 GameplayManager.instance.winnerOfBattleName = player1.PlayerName;
                 GameplayManager.instance.winnerOfBattlePlayerNumber = player1.playerNumber;
                 GameplayManager.instance.winnerOfBattlePlayerConnId = player1.ConnectionId;
+                GameplayManager.instance.loserOfBattleName = player2.PlayerName;
+                GameplayManager.instance.loserOfBattlePlayerNumber = player2.playerNumber;
+                GameplayManager.instance.loserOfBattlePlayerConnId = player2.ConnectionId;
                 GameplayManager.instance.reasonForWinning = "Tie Breaker 1: Highest Card Power";
 
                 UnitsLostFromBattle(player1, player2);
@@ -836,6 +845,9 @@ public class GamePlayer : NetworkBehaviour
                 GameplayManager.instance.winnerOfBattleName = player2.PlayerName;
                 GameplayManager.instance.winnerOfBattlePlayerNumber = player2.playerNumber;
                 GameplayManager.instance.winnerOfBattlePlayerConnId = player2.ConnectionId;
+                GameplayManager.instance.loserOfBattleName = player1.PlayerName;
+                GameplayManager.instance.loserOfBattlePlayerNumber = player1.playerNumber;
+                GameplayManager.instance.loserOfBattlePlayerConnId = player1.ConnectionId;
                 GameplayManager.instance.reasonForWinning = "Tie Breaker 1: Highest Card Power";
 
                 UnitsLostFromBattle(player2, player1);
@@ -849,6 +861,9 @@ public class GamePlayer : NetworkBehaviour
                     GameplayManager.instance.winnerOfBattleName = player1.PlayerName;
                     GameplayManager.instance.winnerOfBattlePlayerNumber = player1.playerNumber;
                     GameplayManager.instance.winnerOfBattlePlayerConnId = player1.ConnectionId;
+                    GameplayManager.instance.loserOfBattleName = player2.PlayerName;
+                    GameplayManager.instance.loserOfBattlePlayerNumber = player2.playerNumber;
+                    GameplayManager.instance.loserOfBattlePlayerConnId = player2.ConnectionId;
                     GameplayManager.instance.reasonForWinning = "Tie Breaker 2: Most Infantry";
 
                     UnitsLostFromBattle(player1, player2);
@@ -859,6 +874,9 @@ public class GamePlayer : NetworkBehaviour
                     GameplayManager.instance.winnerOfBattleName = player2.PlayerName;
                     GameplayManager.instance.winnerOfBattlePlayerNumber = player2.playerNumber;
                     GameplayManager.instance.winnerOfBattlePlayerConnId = player2.ConnectionId;
+                    GameplayManager.instance.loserOfBattleName = player1.PlayerName;
+                    GameplayManager.instance.loserOfBattlePlayerNumber = player1.playerNumber;
+                    GameplayManager.instance.loserOfBattlePlayerConnId = player1.ConnectionId;
                     GameplayManager.instance.reasonForWinning = "Tie Breaker 2: Most Infantry";
 
                     UnitsLostFromBattle(player2, player1);
@@ -869,6 +887,9 @@ public class GamePlayer : NetworkBehaviour
                     GameplayManager.instance.winnerOfBattleName = "tie";
                     GameplayManager.instance.winnerOfBattlePlayerNumber = -1;
                     GameplayManager.instance.winnerOfBattlePlayerConnId = -1;
+                    GameplayManager.instance.loserOfBattleName = "tie";
+                    GameplayManager.instance.loserOfBattlePlayerNumber = -1;
+                    GameplayManager.instance.loserOfBattlePlayerConnId = -1;
                     GameplayManager.instance.reasonForWinning = "Draw: No Winner";
                 }
             }                     
@@ -883,14 +904,16 @@ public class GamePlayer : NetworkBehaviour
             Card winningCard = NetworkIdentity.spawned[winningPlayer.playerBattleCardNetId].gameObject.GetComponent<Card>();
             Card losingCard = NetworkIdentity.spawned[losingPlayer.playerBattleCardNetId].gameObject.GetComponent<Card>();
 
+            //Clear out old data
+            GameplayManager.instance.numberOfTanksLost = 0;
+            GameplayManager.instance.numberOfInfLost = 0;
+            GameplayManager.instance.unitNetIdsLost.Clear();
+
             if (winningCard.AttackValue > losingCard.DefenseValue)
             {
                 Debug.Log("Attack value greater than defense. Units will be lost. Attack value: " + winningCard.AttackValue.ToString() + " Defense Value: " + losingCard.DefenseValue.ToString());
 
-                //Clear out old data
-                GameplayManager.instance.numberOfTanksLost = 0;
-                GameplayManager.instance.numberOfInfLost = 0;
-                GameplayManager.instance.unitNetIdsLost.Clear();
+                
 
                 int unitsToLose = winningCard.AttackValue - losingCard.DefenseValue;
                 if (unitsToLose > losingPlayer.playerArmyNetIds.Count)
@@ -935,12 +958,13 @@ public class GamePlayer : NetworkBehaviour
                     }
                 }
 
-                Debug.Log("Number of units lost: " + GameplayManager.instance.unitNetIdsLost.Count.ToString() + " Number of tanks lost: " + GameplayManager.instance.numberOfTanksLost.ToString() + " number of infantry lost: " + GameplayManager.instance.numberOfInfLost.ToString());
+                Debug.Log("Number of units lost: " + GameplayManager.instance.unitNetIdsLost.Count.ToString() + " Number of tanks lost: " + GameplayManager.instance.numberOfTanksLost.ToString() + " number of infantry lost: " + GameplayManager.instance.numberOfInfLost.ToString());                
             }
             else
             {
                 Debug.Log("No units lost. Attack value: " + winningCard.AttackValue.ToString() + " Defense Value: " + losingCard.DefenseValue.ToString());
             }
+            GameplayManager.instance.HandleAreUnitsLostCalculated(GameplayManager.instance.unitsLostCalculated, true);
         }
     }
 }

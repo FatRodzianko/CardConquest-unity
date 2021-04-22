@@ -82,12 +82,17 @@ public class GameplayManager : NetworkBehaviour
     [SyncVar] public string winnerOfBattleName;
     [SyncVar] public int winnerOfBattlePlayerNumber;
     [SyncVar] public int winnerOfBattlePlayerConnId;
+    [SyncVar] public string loserOfBattleName;
+    [SyncVar] public int loserOfBattlePlayerNumber;
+    [SyncVar] public int loserOfBattlePlayerConnId;
     [SyncVar] public string reasonForWinning;
     [SyncVar(hook = nameof(HandleAreBattleResultsSet))] public bool areBattleResultsSet = false;
     private bool updateResultsPanelLocal = false;
     [SyncVar] public int numberOfTanksLost;
     [SyncVar] public int numberOfInfLost;
     public SyncList<uint> unitNetIdsLost = new SyncList<uint>();
+    [SyncVar(hook = nameof(HandleAreUnitsLostCalculated))] public bool unitsLostCalculated = false;
+    private bool unitsLostCalculatedLocal = false;
 
     [Header("Battle Results UI")]
     [SerializeField] private Text winnerName;
@@ -1306,8 +1311,55 @@ public class GameplayManager : NetworkBehaviour
         {
             winnerName.text = winnerOfBattleName;
             victoryCondition.text = reasonForWinning;
-            unitsLost.text = "";
             updateResultsPanelLocal = true;
         }        
+    }
+    public void HandleAreUnitsLostCalculated(bool oldValue, bool newValue)
+    {
+        if (isServer)
+        {
+            unitsLostCalculated = newValue;
+        }
+        if (isClient && unitsLostCalculated && !unitsLostCalculatedLocal)
+        {
+            UpdateUnitsLostValues();
+            ShowDeadUnits();
+            unitsLostCalculatedLocal = true;
+        }
+    }
+    void UpdateUnitsLostValues()
+    {
+        Debug.Log("Executing UpdateUnitsLostValues");
+        unitsLost.text = "";
+        if (numberOfInfLost == 0 && numberOfTanksLost == 0)
+        {
+            Debug.Log("no units were lost in the battle");
+            unitsLost.text = loserOfBattleName + " lost 0 units.";
+        }
+        else
+        {
+            Debug.Log("Units lost from " + loserOfBattleName +". Tanks: " + numberOfTanksLost.ToString() + " infantry: " + numberOfInfLost.ToString());
+            unitsLost.text = loserOfBattleName + " lost\n";
+            if (numberOfTanksLost > 0)
+            {
+                Debug.Log("Tanks lost.");
+                unitsLost.text += numberOfTanksLost.ToString() + " tanks\n";
+            }
+            if (numberOfInfLost > 0)
+            {
+                Debug.Log("Infantry lost.");
+                unitsLost.text += numberOfInfLost.ToString() + " infantry";
+            }
+        }
+    }
+    void ShowDeadUnits()
+    {
+        Debug.Log("Executing ShowDeadUnits");
+        NetworkIdentity.spawned[currentBattleSite].gameObject.GetComponent<LandScript>().ExpandLosingUnits(loserOfBattlePlayerNumber);
+
+        foreach (uint unitNetId in unitNetIdsLost)
+        {
+            NetworkIdentity.spawned[unitNetId].gameObject.GetComponent<UnitScript>().SpawnUnitDeadIcon();
+        }
     }
 }

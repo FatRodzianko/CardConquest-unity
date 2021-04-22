@@ -153,13 +153,15 @@ MonoBehaviour:
   currentlySelected: 0
   currentLandOccupied: {fileID: 0}
   previouslyOccupiedLand: {fileID: 0}
-  currentPosition: {x: 0, y: 0, z: 0}
-  previousPosition: {x: 0, y: 0, z: 0}
+  newPosition: {x: 0, y: 0, z: 0}
+  startingPosition: {x: 0, y: 0, z: 0}
   landLayer:
     serializedVersion: 2
     m_Bits: 512
   placedDuringUnitPlacement: 0
   canMoveFromServer: 0
+  unitDeadIconPrefab: {fileID: 8915266679852689755, guid: 183aad2d52fcc7a4881794072b55a4e7,
+    type: 3}
 --- !u!114 &-4320913085083455510
 MonoBehaviour:
   m_ObjectHideFlags: 0

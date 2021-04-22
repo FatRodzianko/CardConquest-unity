@@ -1534,7 +1534,7 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 'Units Lost:'
+  m_Text: 'Units:'
 --- !u!222 &398707318
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -5767,8 +5767,8 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: -75}
-  m_SizeDelta: {x: 290, y: 70}
+  m_AnchoredPosition: {x: 0, y: -100}
+  m_SizeDelta: {x: 290, y: 105}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &2092329509
 MonoBehaviour:
@@ -5802,7 +5802,11 @@ MonoBehaviour:
     m_HorizontalOverflow: 0
     m_VerticalOverflow: 0
     m_LineSpacing: 1
-  m_Text: 10 tanks 10 infantry
+  m_Text: 'PlayerName lost:
+
+    10 tanbks
+
+    10 infantry'
 --- !u!222 &2092329510
 CanvasRenderer:
   m_ObjectHideFlags: 0
