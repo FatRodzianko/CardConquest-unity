@@ -607,14 +607,14 @@ public class LandScript : NetworkBehaviour
                     winngingPlayerPosition = NetworkIdentity.spawned[units.Key].gameObject.transform.position;
             }
             Vector3 temp;
-            int playerXMultiplier;
+            int playerXMultiplier = 0;
             if (losingPlayerInf.Count > 1)
             {
                 if (losingPlayerInf[0].transform.position.x > winngingPlayerPosition.x)
                     playerXMultiplier = 1;
                 else
                     playerXMultiplier = -1;
-                for (int i = 1; i < losingPlayerInf.Count; i++)
+                /*for (int i = 1; i < losingPlayerInf.Count; i++)
                 {
                     if (i == 1)
                     {
@@ -641,15 +641,15 @@ public class LandScript : NetworkBehaviour
                         temp.y += 0.8f;
                         losingPlayerInf[i].transform.position = temp;
                     }
-                }
+                }*/
             }
-            if (losingPlayerTanks.Count > 1)
+            else if(losingPlayerTanks.Count > 1)
             {
                 if (losingPlayerTanks[0].transform.position.x > winngingPlayerPosition.x)
                     playerXMultiplier = 1;
                 else
                     playerXMultiplier = -1;
-                for (int i = 1; i < losingPlayerTanks.Count; i++)
+                /*for (int i = 1; i < losingPlayerTanks.Count; i++)
                 {
                     if (i == 1)
                     {
@@ -670,8 +670,10 @@ public class LandScript : NetworkBehaviour
                         temp.x += (0.95f * playerXMultiplier);
                         losingPlayerTanks[i].transform.position = temp;
                     }
-                }
+                }*/
             }
+            if(playerXMultiplier != 0)
+                ExpandUnitsForBattleResults(losingPlayerTanks, losingPlayerInf, playerXMultiplier);
             //remove battle texts for losing player
             List<GameObject> losingPlayerBattleTextToDestroy = new List<GameObject>();
             foreach (KeyValuePair<GameObject, int> battleText in BattleUnitTexts)
@@ -689,6 +691,104 @@ public class LandScript : NetworkBehaviour
                 textObject = null;
             }
             losingPlayerBattleTextToDestroy.Clear();
+        }
+    }
+    public void ExpandForTie()
+    {
+        int player1Multiplier;
+        int player2Multiplier;
+
+        Vector3 player1UnitStartPosition = new Vector3(0, 0, 0);
+        Vector3 player2UnitStartPosition = new Vector3(0, 0, 0);
+
+        if (Player1Inf.Count > 0)
+            player1UnitStartPosition = Player1Inf[0].gameObject.transform.position;
+        else
+            player1UnitStartPosition = Player1Tank[0].gameObject.transform.position;
+
+        if (Player2Inf.Count > 0)
+            player2UnitStartPosition = Player2Inf[0].gameObject.transform.position;
+        else
+            player2UnitStartPosition = Player2Tank[0].gameObject.transform.position;
+
+        if (player1UnitStartPosition.x > player2UnitStartPosition.x)
+        {
+            player1Multiplier = 1;
+            player2Multiplier = -1;
+        }
+        else
+        {
+            player1Multiplier = -1;
+            player2Multiplier = 1;
+        }
+        ExpandUnitsForBattleResults(Player1Tank, Player1Inf, player1Multiplier);
+        ExpandUnitsForBattleResults(Player2Tank, Player2Inf, player2Multiplier);
+        foreach (KeyValuePair<GameObject, int> battleText in BattleUnitTexts)
+        {
+            GameObject battleTextToDestroy = battleText.Key;
+            Destroy(battleTextToDestroy);
+            battleTextToDestroy = null;
+        }
+        BattleUnitTexts.Clear();
+    }
+    void ExpandUnitsForBattleResults(List<GameObject> tanks, List<GameObject> inf, int playerXMultiplier)
+    {
+        Vector3 temp;
+        if (inf.Count > 1)
+        {
+            for (int i = 1; i < inf.Count; i++)
+            {
+                if (i == 1)
+                {
+                    temp = inf[i].transform.position;
+                    temp.x += (0.65f * playerXMultiplier);
+                    inf[i].transform.position = temp;
+                }
+                else if (i == 2)
+                {
+                    temp = inf[i].transform.position;
+                    temp.y -= 0.8f;
+                    inf[i].transform.position = temp;
+                }
+                else if (i == 3)
+                {
+                    temp = inf[i].transform.position;
+                    temp.y -= 0.8f;
+                    temp.x += (0.65f * playerXMultiplier);
+                    inf[i].transform.position = temp;
+                }
+                else if (i == 4)
+                {
+                    temp = inf[i].transform.position;
+                    temp.y += 0.8f;
+                    inf[i].transform.position = temp;
+                }
+            }
+        }
+        if (tanks.Count > 1)
+        {
+            for (int i = 1; i < tanks.Count; i++)
+            {
+                if (i == 1)
+                {
+                    temp = tanks[i].transform.position;
+                    temp.x += (0.95f * playerXMultiplier);
+                    tanks[i].transform.position = temp;
+                }
+                else if (i == 2)
+                {
+                    temp = tanks[i].transform.position;
+                    temp.y += 0.6f;
+                    tanks[i].transform.position = temp;
+                }
+                else if (i == 3)
+                {
+                    temp = tanks[i].transform.position;
+                    temp.y += 0.6f;
+                    temp.x += (0.95f * playerXMultiplier);
+                    tanks[i].transform.position = temp;
+                }
+            }
         }
     }
 }

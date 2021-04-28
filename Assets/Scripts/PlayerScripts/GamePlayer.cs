@@ -51,6 +51,10 @@ public class GamePlayer : NetworkBehaviour
     [SyncVar(hook = nameof(HandleUpdatedPlayerBattleCard))] public uint playerBattleCardNetId;
     public GameObject selectedCard;
 
+    [Header("Retreat Units Section")]
+    [SyncVar] public bool doesPlayerNeedToRetreat = false;
+    [SyncVar] public bool canPlayerRetreat = false;
+
     private NetworkManagerCC game;
     private NetworkManagerCC Game
     {
@@ -554,6 +558,16 @@ public class GamePlayer : NetworkBehaviour
                 RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
                 return;
             }
+            if (Game.CurrentGamePhase == "Battle Results")
+            {
+                Game.CurrentGamePhase = "Retreat Units";
+                Debug.Log("Game phase changed to Retreat Units");
+                //CheckWhichPlayersNeedToRetreat();
+                DestroyUnitsLostInBattle();
+                MovePlayedCardToDiscard();
+                RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
+                return;
+            }
             RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
         }
         else
@@ -891,6 +905,7 @@ public class GamePlayer : NetworkBehaviour
                     GameplayManager.instance.loserOfBattlePlayerNumber = -1;
                     GameplayManager.instance.loserOfBattlePlayerConnId = -1;
                     GameplayManager.instance.reasonForWinning = "Draw: No Winner";
+                    UnitsLostFromBattle(null, null);
                 }
             }                     
         }
@@ -899,6 +914,7 @@ public class GamePlayer : NetworkBehaviour
     [Server]
     void UnitsLostFromBattle(GamePlayer winningPlayer, GamePlayer losingPlayer)
     {
+        Debug.Log("Executing UnitsLostFromBattle");
         if (winningPlayer && losingPlayer)
         { 
             Card winningCard = NetworkIdentity.spawned[winningPlayer.playerBattleCardNetId].gameObject.GetComponent<Card>();
@@ -913,58 +929,285 @@ public class GamePlayer : NetworkBehaviour
             {
                 Debug.Log("Attack value greater than defense. Units will be lost. Attack value: " + winningCard.AttackValue.ToString() + " Defense Value: " + losingCard.DefenseValue.ToString());
 
-                
-
                 int unitsToLose = winningCard.AttackValue - losingCard.DefenseValue;
                 if (unitsToLose > losingPlayer.playerArmyNetIds.Count)
                 {
                     unitsToLose = losingPlayer.playerArmyNetIds.Count;
                 }
-
-                List<uint> losingTanks = new List<uint>();
-                List<uint> losingInf = new List<uint>();
-
-                foreach (uint unitNetId in losingPlayer.playerArmyNetIds)
-                {
-                    if (NetworkIdentity.spawned[unitNetId].gameObject.tag == "tank")
-                    {
-                        losingTanks.Add(unitNetId);
-                    }
-                    else if (NetworkIdentity.spawned[unitNetId].gameObject.tag == "infantry")
-                    {
-                        losingInf.Add(unitNetId);
-                    }
-                }
-                if (losingTanks.Count > 0)
-                {
-                    foreach (uint unitNetId in losingTanks)
-                    {
-                        GameplayManager.instance.unitNetIdsLost.Add(unitNetId);
-                        GameplayManager.instance.numberOfTanksLost++;
-                        unitsToLose--;
-                        if (unitsToLose <= 0)
-                            break;
-                    }
-                }
-                if (unitsToLose > 0 && losingInf.Count > 0)
-                {
-                    foreach (uint unitNetId in losingInf)
-                    {
-                        GameplayManager.instance.unitNetIdsLost.Add(unitNetId);
-                        GameplayManager.instance.numberOfInfLost++;
-                        unitsToLose--;
-                        if (unitsToLose <= 0)
-                            break;
-                    }
-                }
-
-                Debug.Log("Number of units lost: " + GameplayManager.instance.unitNetIdsLost.Count.ToString() + " Number of tanks lost: " + GameplayManager.instance.numberOfTanksLost.ToString() + " number of infantry lost: " + GameplayManager.instance.numberOfInfLost.ToString());                
+                KillUnitsFromBattle(losingPlayer, unitsToLose);
             }
             else
             {
                 Debug.Log("No units lost. Attack value: " + winningCard.AttackValue.ToString() + " Defense Value: " + losingCard.DefenseValue.ToString());
             }
-            GameplayManager.instance.HandleAreUnitsLostCalculated(GameplayManager.instance.unitsLostCalculated, true);
+            //GameplayManager.instance.HandleAreUnitsLostCalculated(GameplayManager.instance.unitsLostCalculated, true);
+        }
+        CheckWhichPlayersNeedToRetreat();
+        GameplayManager.instance.HandleAreUnitsLostCalculated(GameplayManager.instance.unitsLostCalculated, true);
+    }
+    [Server]
+    void CheckWhichPlayersNeedToRetreat()
+    {
+        List<GamePlayer> playersToRetreat = new List<GamePlayer>();
+        //If the battle is a tie, make sure that all players involved are set to retreat
+        if (GameplayManager.instance.reasonForWinning == "Draw: No Winner")
+        {
+            //Get all the GamePlayers involved in the battle
+            LandScript battleSiteLandScript = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject.GetComponent<LandScript>();
+            List<int> battlePlayerNumbers = new List<int>();
+            foreach (KeyValuePair<uint, int> battleUnitPlayer in battleSiteLandScript.UnitNetIdsAndPlayerNumber)
+            {
+                bool isPlayerNumberInList = battlePlayerNumbers.Contains(battleUnitPlayer.Value);
+                if (!isPlayerNumberInList)
+                    battlePlayerNumbers.Add(battleUnitPlayer.Value);
+            }
+
+            if (battlePlayerNumbers.Count > 0)
+            {
+                foreach (GamePlayer gamePlayer in Game.GamePlayers)
+                {
+                    if (battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                    {
+                        gamePlayer.doesPlayerNeedToRetreat = true;
+                        playersToRetreat.Add(gamePlayer);
+                    }
+                    else
+                        gamePlayer.doesPlayerNeedToRetreat = false;
+                }
+            }
+        }
+        else
+        {
+            foreach (GamePlayer gamePlayer in Game.GamePlayers)
+            {
+                if (gamePlayer.playerNumber == GameplayManager.instance.loserOfBattlePlayerNumber && gamePlayer.ConnectionId == GameplayManager.instance.loserOfBattlePlayerConnId)
+                {
+                    gamePlayer.doesPlayerNeedToRetreat = true;
+                    playersToRetreat.Add(gamePlayer);
+                }
+                else
+                    gamePlayer.doesPlayerNeedToRetreat = false;
+            }
+        }
+        CanPlayerRetreatFromBattle(playersToRetreat, GameplayManager.instance.currentBattleSite);
+    }
+    [Server]
+    void CanPlayerRetreatFromBattle(List<GamePlayer> playersToRetreat, uint battleSiteId)
+    {
+        //Get list of land tiles 1 distance away from battle site
+        List<LandScript> landsToRetreatTo = new List<LandScript>();
+        GameObject battleSiteLand = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject;
+        GameObject allLand = GameObject.FindGameObjectWithTag("LandHolder");
+        foreach (Transform landObject in allLand.transform)
+        {
+            if (landObject.transform.position != battleSiteLand.transform.position)
+            {
+                float distanceFromBattle = Vector3.Distance(battleSiteLand.transform.position, landObject.gameObject.transform.position);
+                if (distanceFromBattle < 3.01f)
+                {
+                    Debug.Log("Can retret to " + landObject.gameObject + ". Distance from battlesite: " + distanceFromBattle.ToString("0.00") + ". " + battleSiteLand.transform.position + " " + landObject.gameObject.transform.position);
+                    LandScript landScript = landObject.gameObject.GetComponent<LandScript>();
+                    landsToRetreatTo.Add(landScript);
+                }
+            }            
+        }
+
+        //Check if the available lands have units from another player on it. Player's can only retreat to lands with no units on them or only have their own units
+        foreach (GamePlayer retreatingPlayer in playersToRetreat)
+        {
+            //Get number of units player has to retreat
+            int numberOfUnitsToRetreat = 0;
+            foreach (KeyValuePair<uint, int> unit in battleSiteLand.GetComponent<LandScript>().UnitNetIdsAndPlayerNumber)
+            {
+                if (unit.Value == retreatingPlayer.playerNumber)
+                    numberOfUnitsToRetreat++;
+            }
+            //remove killed units from card power from the number to retreat
+            numberOfUnitsToRetreat -= GameplayManager.instance.unitNetIdsLost.Count;
+            Debug.Log(retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber + " must retreat " + numberOfUnitsToRetreat.ToString() + " number of units.");
+            
+            // If the retreating player has units remaining to retreat, check each land if there are enemy units on, and keep track of the available space on land. If there isn't enough "room" on a land tile to retreat all units, more units will need to be destroyed.
+            int numberAvailableToRetreat = 0;
+            if (numberOfUnitsToRetreat > 0)
+            {
+                List<LandScript> landWithNoEnemies = new List<LandScript>();
+                foreach (LandScript landToRetreatTo in landsToRetreatTo)
+                {
+                    bool enemyUnitsOnLand = false;
+                    foreach (KeyValuePair<uint, int> unit in landToRetreatTo.UnitNetIdsAndPlayerNumber)
+                    {
+                        if (unit.Value != retreatingPlayer.playerNumber)
+                        {
+                            enemyUnitsOnLand = true;
+                            break;
+                        }
+                    }
+                    if (!enemyUnitsOnLand)
+                    {
+                        Debug.Log("No enemy units on " + landToRetreatTo.gameObject);
+                        if (landToRetreatTo.UnitNetIdsAndPlayerNumber.Count < 5)
+                        {
+                            Debug.Log("No enemy units AND available space to retreat to " + landToRetreatTo.gameObject);
+                            landWithNoEnemies.Add(landToRetreatTo);
+                            numberAvailableToRetreat += 5 - landToRetreatTo.UnitNetIdsAndPlayerNumber.Count;
+                        }
+                    }
+                }
+            }
+
+            //Check if all units are able to retreat
+            if (numberOfUnitsToRetreat <= numberAvailableToRetreat)
+            {
+                Debug.Log("Enough space for all of " + retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber + " to retreat all units.");
+            }
+            else if (numberAvailableToRetreat == 0)
+            {
+                Debug.Log("NO space for ANY of " + retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber + " to retreat units. ALL UNITS WILL BE DESTROYED!");
+                KillUnitsFromBattle(retreatingPlayer, numberOfUnitsToRetreat);
+                GameplayManager.instance.HandleUnitsLostFromRetreat(GameplayManager.instance.unitsLostFromRetreat, true);
+            }
+            else
+            {
+                int numberOfUnitsToDestroy = numberOfUnitsToRetreat - numberAvailableToRetreat;
+                Debug.Log("Not enough space for " + retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber + " to retreat all units. " + numberOfUnitsToDestroy.ToString() + " will need to be destroyed.");
+                KillUnitsFromBattle(retreatingPlayer, numberOfUnitsToDestroy);
+                GameplayManager.instance.HandleUnitsLostFromRetreat(GameplayManager.instance.unitsLostFromRetreat, true);
+            }
+            
+        }
+    }
+    [Server]
+    void KillUnitsFromBattle(GamePlayer retreatingPlayer, int numberOfUnitsToKill)
+    {
+        Debug.Log("Executing KillUnitsThatCantRetreat. Will destroy " + numberOfUnitsToKill.ToString() + " for player: " + retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber.ToString());
+        // Get all the player's units from the battle site
+        GameObject battleSiteLand = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject;
+        List<uint> retreatingPlayerUnits = new List<uint>();
+        foreach (KeyValuePair<uint, int> unit in battleSiteLand.GetComponent<LandScript>().UnitNetIdsAndPlayerNumber)
+        {
+            if (unit.Value == retreatingPlayer.playerNumber)
+                retreatingPlayerUnits.Add(unit.Key);
+        }
+
+        //Remove uint IDs that have already been "killed" in UnitsLostFromBattle
+        foreach (uint unitLost in GameplayManager.instance.unitNetIdsLost)
+        {
+            if (retreatingPlayerUnits.Contains(unitLost))
+                retreatingPlayerUnits.Remove(unitLost);
+        }
+
+        if (retreatingPlayerUnits.Count > 0)
+        {
+            if (numberOfUnitsToKill > retreatingPlayerUnits.Count)
+                numberOfUnitsToKill = retreatingPlayerUnits.Count;
+            //Determine what remaining units are tanks versus what units are infantry. Kill tanks before infantry
+            List<uint> playerTanks = new List<uint>();
+            List<uint> playerInf = new List<uint>();
+            foreach (uint unitNetId in retreatingPlayerUnits)
+            {
+                if (NetworkIdentity.spawned[unitNetId].gameObject.tag == "tank")
+                {
+                    playerTanks.Add(unitNetId);
+                }
+                else if (NetworkIdentity.spawned[unitNetId].gameObject.tag == "infantry")
+                {
+                    playerInf.Add(unitNetId);
+                }
+            }
+            //Go through and kill tanks
+            if (playerTanks.Count > 0)
+            {
+                foreach (uint unitNetId in playerTanks)
+                {
+                    GameplayManager.instance.unitNetIdsLost.Add(unitNetId);
+                    GameplayManager.instance.numberOfTanksLost++;
+                    numberOfUnitsToKill--;
+                    if (numberOfUnitsToKill <= 0)
+                        break;
+                }
+            }
+            //Go through and kill infantry
+            if (numberOfUnitsToKill > 0 && playerInf.Count > 0)
+            {
+                foreach (uint unitNetId in playerInf)
+                {
+                    GameplayManager.instance.unitNetIdsLost.Add(unitNetId);
+                    GameplayManager.instance.numberOfInfLost++;
+                    numberOfUnitsToKill--;
+                    if (numberOfUnitsToKill <= 0)
+                        break;
+                }
+            }
+        }
+    }
+    [Server]
+    void MovePlayedCardToDiscard()
+    {
+        Debug.Log("Executing MovePlayedCardToDiscard on the server");
+        //Get game players involved in the battle
+        List<GamePlayer> battlePlayers = new List<GamePlayer>();
+        LandScript battleSiteLandScript = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject.GetComponent<LandScript>();
+        List<int> battlePlayerNumbers = new List<int>();
+        foreach (KeyValuePair<uint, int> battleUnitPlayer in battleSiteLandScript.UnitNetIdsAndPlayerNumber)
+        {
+            bool isPlayerNumberInList = battlePlayerNumbers.Contains(battleUnitPlayer.Value);
+            if (!isPlayerNumberInList)
+                battlePlayerNumbers.Add(battleUnitPlayer.Value);
+        }
+
+        if (battlePlayerNumbers.Count > 0)
+        {
+            foreach (GamePlayer gamePlayer in Game.GamePlayers)
+            {
+                if (battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                    battlePlayers.Add(gamePlayer);
+            }
+        }
+
+        // Move the player's card to the discard
+        foreach (GamePlayer battlePlayer in battlePlayers)
+        {
+            if(battlePlayer.playerCardHandNetIds.Contains(battlePlayer.playerBattleCardNetId))
+                battlePlayer.myPlayerCardHand.GetComponent<PlayerHand>().MoveCardToDiscard(battlePlayer.playerBattleCardNetId);
+        }
+    }
+    [Server]
+    void DestroyUnitsLostInBattle()
+    {
+        Debug.Log("Executing DestroyUnitsLostInBattle on the server");
+        if (GameplayManager.instance.unitNetIdsLost.Count > 0)
+        {
+            Debug.Log("unitNetIdsLost is greater than 0, must destroy this many units: " + GameplayManager.instance.unitNetIdsLost.Count.ToString());
+            foreach (uint unitNetId in GameplayManager.instance.unitNetIdsLost)
+            {
+                UnitScript unitNetIdScript = NetworkIdentity.spawned[unitNetId].gameObject.GetComponent<UnitScript>();
+
+                foreach (GamePlayer gamePlayer in Game.GamePlayers)
+                {
+                    if (gamePlayer.ConnectionId == unitNetIdScript.ownerConnectionId && gamePlayer.playerNumber == unitNetIdScript.ownerPlayerNumber)
+                    {
+                        if (gamePlayer.playerUnitNetIds.Contains(unitNetId))
+                            gamePlayer.playerUnitNetIds.Remove(unitNetId);
+                        break;
+                    } 
+                }
+            }
+            RpcDestroyUnitsLostInBattle();
+        }
+    }
+    [ClientRpc]
+    void RpcDestroyUnitsLostInBattle()
+    {
+        Debug.Log("Executing RpcDestroyUnitsLostInBattle on clients");
+        foreach (uint unitLostInBattleNetId in GameplayManager.instance.unitNetIdsLost)
+        {
+            GameObject unitLostInBattle = NetworkIdentity.spawned[unitLostInBattleNetId].gameObject;
+            if (unitLostInBattle)
+            {
+                Debug.Log("Destroying unit with ID: " + unitLostInBattleNetId.ToString());
+                Destroy(unitLostInBattle);
+                unitLostInBattle = null;
+            }
         }
     }
 }

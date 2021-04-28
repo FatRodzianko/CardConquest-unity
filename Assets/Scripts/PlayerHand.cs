@@ -144,6 +144,8 @@ public class PlayerHand : NetworkBehaviour
                 GameplayManager.instance.localPlayerBattlePanel.SetActive(true);
                 GameplayManager.instance.opponentPlayerBattlePanel.SetActive(true);
             }
+            if (GameplayManager.instance.showingNearbyUnits)
+                GameplayManager.instance.ShowUnitsOnMap();
         }
         else
         {
@@ -164,5 +166,38 @@ public class PlayerHand : NetworkBehaviour
         cardToAdd.transform.localScale = new Vector3(1.5f, 1.5f, 0f);
         cardToAdd.SetActive(false);
         Hand = Hand.OrderByDescending(o => o.GetComponent<Card>().Power).ToList();
+    }
+    [Server]
+    public void MoveCardToDiscard(uint cardtoDiscardNetId)
+    {
+        Debug.Log("Executing MoveCardToDiscard to discard card with network id: " + cardtoDiscardNetId.ToString());
+        if (HandNetId.Contains(cardtoDiscardNetId))
+            HandNetId.Remove(cardtoDiscardNetId);
+        if (!DiscardPileNetId.Contains(cardtoDiscardNetId))
+            DiscardPileNetId.Add(cardtoDiscardNetId);
+
+        // If cards in the hand still remain, have player remove cards locally and stuff
+        if (HandNetId.Count > 0)
+        {
+            RpcMoveCardToDiscard(cardtoDiscardNetId);
+        }
+    }
+    [ClientRpc]
+    void RpcMoveCardToDiscard(uint cardtoDiscardNetId)
+    {
+        GameObject cardToDiscard = NetworkIdentity.spawned[cardtoDiscardNetId].gameObject;
+        if (cardToDiscard)
+        {
+            if (Hand.Contains(cardToDiscard))
+                Hand.Remove(cardToDiscard);
+            if (!DiscardPile.Contains(cardToDiscard))
+                DiscardPile.Add(cardToDiscard);
+
+            // If the card is not a child of the PlayerCardHand object, set it as a child of the PlayerCardHand object
+            if (!cardToDiscard.transform.IsChildOf(this.transform))
+                cardToDiscard.transform.SetParent(this.transform);
+            if (cardToDiscard.activeInHierarchy)
+                cardToDiscard.SetActive(false);
+        }
     }
 }
