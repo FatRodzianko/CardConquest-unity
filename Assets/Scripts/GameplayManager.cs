@@ -99,6 +99,7 @@ public class GameplayManager : NetworkBehaviour
     private bool localUnitsLostFromRetreat = false;
 
     [Header("Battle Results UI")]
+    [SerializeField] private GameObject endBattleResultsButton;
     [SerializeField] private Text winnerName;
     [SerializeField] private Text victoryCondition;
     [SerializeField] private Text unitsLost;
@@ -729,6 +730,19 @@ public class GameplayManager : NetworkBehaviour
                     Card playerCardScript = playerCard.GetComponent<Card>();
                     playerCardScript.isClickable = true;
                 }
+            }
+        }
+        if (currentGamePhase == "Battle Results")
+        {
+            if (LocalGamePlayerScript.ReadyForNextPhase)
+            {
+                Debug.Log("Local Player is ready to go to next phase.");
+                endBattleResultsButton.GetComponentInChildren<Text>().text = "Unready";
+            }
+            else
+            {
+                Debug.Log("Local Player IS NOT ready to go to next phase.");
+                endBattleResultsButton.GetComponentInChildren<Text>().text = "Next Turn";
             }
         }
     }

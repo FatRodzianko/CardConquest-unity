@@ -4359,7 +4359,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &1259355355
 RectTransform:
   m_ObjectHideFlags: 0
@@ -7273,6 +7273,11 @@ PrefabInstance:
       propertyPath: showNearybyUnitsButton
       value: 
       objectReference: {fileID: 1655660789}
+    - target: {fileID: 3220869510780512859, guid: ff9811f400a841440aba146a269e5d93,
+        type: 3}
+      propertyPath: endBattleResultsButton
+      value: 
+      objectReference: {fileID: 1430666227}
     - target: {fileID: 6148163227921238240, guid: ff9811f400a841440aba146a269e5d93,
         type: 3}
       propertyPath: m_LocalPosition.x

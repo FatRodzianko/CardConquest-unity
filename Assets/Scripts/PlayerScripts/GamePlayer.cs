@@ -1023,7 +1023,16 @@ public class GamePlayer : NetworkBehaviour
                     numberOfUnitsToRetreat++;
             }
             //remove killed units from card power from the number to retreat
-            numberOfUnitsToRetreat -= GameplayManager.instance.unitNetIdsLost.Count;
+            int numberOfUnitsAlreadyKilled = 0;
+            foreach (uint unit in GameplayManager.instance.unitNetIdsLost)
+            {
+                if (retreatingPlayer.playerUnitNetIds.Contains(unit))
+                {
+                    numberOfUnitsAlreadyKilled++;
+                }
+            }
+            //numberOfUnitsToRetreat -= GameplayManager.instance.unitNetIdsLost.Count;
+            numberOfUnitsToRetreat -= numberOfUnitsAlreadyKilled;
             Debug.Log(retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber + " must retreat " + numberOfUnitsToRetreat.ToString() + " number of units.");
             
             // If the retreating player has units remaining to retreat, check each land if there are enemy units on, and keep track of the available space on land. If there isn't enough "room" on a land tile to retreat all units, more units will need to be destroyed.
@@ -1191,22 +1200,11 @@ public class GamePlayer : NetworkBehaviour
                         break;
                     } 
                 }
-            }
-            RpcDestroyUnitsLostInBattle();
-        }
-    }
-    [ClientRpc]
-    void RpcDestroyUnitsLostInBattle()
-    {
-        Debug.Log("Executing RpcDestroyUnitsLostInBattle on clients");
-        foreach (uint unitLostInBattleNetId in GameplayManager.instance.unitNetIdsLost)
-        {
-            GameObject unitLostInBattle = NetworkIdentity.spawned[unitLostInBattleNetId].gameObject;
-            if (unitLostInBattle)
-            {
-                Debug.Log("Destroying unit with ID: " + unitLostInBattleNetId.ToString());
-                Destroy(unitLostInBattle);
-                unitLostInBattle = null;
+                GameObject unitToDestroy = NetworkIdentity.spawned[unitNetId].gameObject;
+                if (unitToDestroy)
+                    NetworkServer.Destroy(unitToDestroy);
+                Debug.Log("Server destroyed unit with network id: " + unitNetId.ToString());
+                unitToDestroy = null;
             }
         }
     }
