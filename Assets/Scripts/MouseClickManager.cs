@@ -76,7 +76,7 @@ public class MouseClickManager : MonoBehaviour
             if (rayHitUnit.collider != null)
             {
 
-                if (rayHitUnit.collider.gameObject.GetComponent<NetworkIdentity>().hasAuthority && !playerViewingHand && !playerViewingOpponentHand && !playerReadyForNextPhase && canSelectUnitsInThisPhase)
+                if (rayHitUnit.collider.gameObject.GetComponent<NetworkIdentity>().hasAuthority && !playerViewingHand && !playerViewingOpponentHand && !playerReadyForNextPhase && canSelectUnitsInThisPhase && GameplayManager.instance.currentGamePhase != "Retreat Units")
                 {
                     Debug.Log("Player has authority over unit");
                     UnitScript unitScript = rayHitUnit.collider.GetComponent<UnitScript>();
@@ -110,7 +110,40 @@ public class MouseClickManager : MonoBehaviour
                         }
                     }
                 }
-                else 
+                else if (rayHitUnit.collider.gameObject.GetComponent<NetworkIdentity>().hasAuthority && !playerViewingHand && !playerViewingOpponentHand && !playerReadyForNextPhase && canSelectUnitsInThisPhase && GameplayManager.instance.currentGamePhase == "Retreat Units")
+                {
+                    //Unit movement specifically for retreating units
+                    //only allow player to select unit that has to retreat
+                    if (LocalGamePlayerScript.playerArmyNetIds.Contains(rayHitUnit.collider.gameObject.GetComponent<NetworkIdentity>().netId))
+                    {
+                        UnitScript unitScript = rayHitUnit.collider.GetComponent<UnitScript>();
+                        if (!unitScript.currentlySelected)
+                        {
+                            Debug.Log("Selecting a new unit.");
+                            unitsSelected.Add(rayHitUnit.collider.gameObject);
+                            unitScript.currentlySelected = !unitScript.currentlySelected;
+                            unitScript.ClickedOn();
+                            if (unitScript.currentLandOccupied != null && unitScript.currentLandOccupied.GetComponent<NetworkIdentity>().netId != GameplayManager.instance.currentBattleSite)
+                            {
+                                LandScript landScript = unitScript.currentLandOccupied.GetComponent<LandScript>();
+                                landScript.HighlightLandArea();
+                            }
+                        }
+                        else
+                        {
+                            unitsSelected.Remove(rayHitUnit.collider.gameObject);
+                            Debug.Log("Deselecting the unit unit.");
+                            unitScript.currentlySelected = !unitScript.currentlySelected;
+                            unitScript.ClickedOn();
+                            unitScript.CheckLandForRemainingSelectedUnits();
+                        }
+                    }
+                    else 
+                    {
+                        Debug.Log("Player clicked on unit that doesn't have to retreat.");
+                    }                    
+                }
+                else
                 {
                     Debug.Log("Player DOES NOT have authority over unit");
                 }
@@ -187,6 +220,8 @@ public class MouseClickManager : MonoBehaviour
                 GameplayManager.instance.CheckIfAllUnitsHaveBeenPlaced();
             if (GameplayManager.instance.currentGamePhase == "Unit Movement")
                 GameplayManager.instance.UnitsHaveMoved();
+            if (GameplayManager.instance.currentGamePhase == "Retreat Units")
+                GameplayManager.instance.CheckIfUnitsHaveRetreated();
         }
     }
     [Client]

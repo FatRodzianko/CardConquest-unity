@@ -455,6 +455,11 @@ public class LandScript : NetworkBehaviour
     public void MoveUnitsForBattleSite()
     {
         Debug.Log("Executing MoveUnitsForBattleSite");
+        //Clear out any old data
+        Player1Inf.Clear();
+        Player1Tank.Clear();
+        Player2Inf.Clear();
+        Player2Tank.Clear();
         //For now this will be "hard coded" for a 2 player game where the playernumbers are either 1 or 2
         foreach (KeyValuePair<uint, int> units in UnitNetIdsAndPlayerNumber)
         {            
@@ -790,5 +795,141 @@ public class LandScript : NetworkBehaviour
                 }
             }
         }
+    }
+    public void RearrangeUnitsAfterTheyAreKilledFromBattle(int playerNumber)
+    {
+        Debug.Log("Executing RearrangeUnitsAfterTheyAreKilledFromBattle");
+        if (playerNumber == 1)
+        {
+            if (Player1Inf.Count > 0)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y -= 0.5f;
+                temp.x -= 0.5f;
+                foreach (GameObject inf in Player1Inf)
+                    inf.transform.position = temp;
+            }
+            if (Player1Tank.Count > 0)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y += 0.5f;
+                temp.x -= 0.7f;
+                foreach (GameObject tank in Player1Tank)
+                    tank.transform.position = temp;
+            }
+            ExpandUnitsForBattleResults(Player1Tank, Player1Inf, -1);
+        }
+        else if (playerNumber == 2)
+        {
+            if (Player2Inf.Count > 0)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y -= 0.5f;
+                temp.x += 0.5f;
+                foreach (GameObject inf in Player2Inf)
+                    inf.transform.position = temp;
+            }
+            if (Player2Tank.Count > 0)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y += 0.5f;
+                temp.x += 0.7f;
+                foreach (GameObject tank in Player2Tank)
+                    tank.transform.position = temp;
+            }
+            ExpandUnitsForBattleResults(Player2Tank, Player2Inf, 1);
+        }
+        else if (playerNumber == -1)
+        {
+            if (Player1Inf.Count > 0)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y -= 0.5f;
+                temp.x -= 0.5f;
+                foreach (GameObject inf in Player1Inf)
+                    inf.transform.position = temp;
+            }
+            if (Player1Tank.Count > 0)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y += 0.5f;
+                temp.x -= 0.7f;
+                foreach (GameObject tank in Player1Tank)
+                    tank.transform.position = temp;
+            }
+            if (Player2Inf.Count > 0)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y -= 0.5f;
+                temp.x += 0.5f;
+                foreach (GameObject inf in Player2Inf)
+                    inf.transform.position = temp;
+            }
+            if (Player2Tank.Count > 0)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y += 0.5f;
+                temp.x += 0.7f;
+                foreach (GameObject tank in Player2Tank)
+                    tank.transform.position = temp;
+            }
+            ExpandUnitsForBattleResults(Player1Tank, Player1Inf, -1);
+            ExpandUnitsForBattleResults(Player2Tank, Player2Inf, 1);
+        }
+    }
+    public void RemoveBattleSiteHighlightAndText()
+    {
+        if (battleOutlineObject)
+        {
+            Destroy(battleOutlineObject);
+            battleOutlineObject = null;
+        }
+        if (battleNumberTextObject)
+        {
+            Destroy(battleNumberTextObject);
+            battleNumberTextObject = null;
+        }
+    }
+    public void ResetUnitPositionAndUnitTextAfterBattle()
+    {
+        // Clear out old army info since the battle is over
+        Player1Inf.Clear();
+        Player1Tank.Clear();
+        Player2Inf.Clear();
+        Player2Tank.Clear();
+        
+        //Destroy and clear out the BattleUnitTexts
+        foreach (KeyValuePair<GameObject, int> battleText in BattleUnitTexts)
+        {
+            Destroy(battleText.Key);
+        }
+        BattleUnitTexts.Clear();
+
+        //Reposition the units still on the land
+        if (tanksOnLand.Count > 0)
+        {
+            foreach (GameObject tank in tanksOnLand)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y += 0.5f;
+                tank.transform.position = temp;
+                
+            }
+        }
+        if (infantryOnLand.Count > 0)
+        {
+            foreach (GameObject inf in infantryOnLand)
+            {
+                Vector3 temp = this.transform.position;
+                temp.y -= 0.5f;
+                inf.transform.position = temp;
+
+            }
+        }
+        // Create unit texts if multiple units are on the land
+        if (infantryOnLand.Count > 1)
+            MultipleUnitsUIText("infantry");
+        if (tanksOnLand.Count > 1)
+            MultipleUnitsUIText("tank");
     }
 }

@@ -69,6 +69,8 @@ public class UnitScript : NetworkBehaviour
 
     public void MoveUnit(GameObject LandToMoveTo)
     {
+
+        
         Vector3 temp = LandToMoveTo.transform.position;
         if (gameObject.tag == "tank")
         {
@@ -83,6 +85,9 @@ public class UnitScript : NetworkBehaviour
         if (GameplayManager.instance.currentGamePhase == "Unit Placement")
             placedDuringUnitPlacement = true;
         UpdateUnitLandObject(LandToMoveTo);
+        
+        //LandToMoveTo.GetComponent<LandScript>().RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
+        
     }
 
     public void UpdateUnitLandObject(GameObject LandToMoveTo)
@@ -99,37 +104,88 @@ public class UnitScript : NetworkBehaviour
             Debug.Log("Unit moved to new land");
             if (currentLandOccupied != null)
             {
+                LandScript currentLandOccupiedScript = currentLandOccupied.GetComponent<LandScript>();
                 if (gameObject.tag == "infantry")
                 {
                     //Remove unit from previous land tile
                     Debug.Log("Removed infantry from previous land object at: " + currentLandOccupied.transform.position.x.ToString() + "," + currentLandOccupied.transform.position.y.ToString());
-                    currentLandOccupied.GetComponent<LandScript>().infantryOnLand.Remove(gameObject);
-                    currentLandOccupied.GetComponent<LandScript>().UpdateUnitText();
+                    //currentLandOccupied.GetComponent<LandScript>().infantryOnLand.Remove(gameObject);
+                    //currentLandOccupied.GetComponent<LandScript>().UpdateUnitText();
 
+                    if (GameplayManager.instance.currentGamePhase == "Retreat Units" && currentLandOccupied.GetComponent<NetworkIdentity>().netId == GameplayManager.instance.currentBattleSite)
+                    {
+                        Debug.Log("Will remove unit from the battle sites army");
+                        currentLandOccupiedScript.infantryOnLand.Remove(gameObject);
+                        if (currentLandOccupiedScript.Player1Inf.Contains(this.gameObject))
+                            currentLandOccupiedScript.Player1Inf.Remove(this.gameObject);
+                        if (currentLandOccupiedScript.Player2Inf.Contains(this.gameObject))
+                            currentLandOccupiedScript.Player2Inf.Remove(this.gameObject);
+                    }
+                    else
+                    {
+                        Debug.Log("Removing unit. Not moving away from or to the current battle site");
+                        currentLandOccupiedScript.infantryOnLand.Remove(gameObject);
+                        currentLandOccupiedScript.UpdateUnitText();
+                    }
                     //Add Unit to new land tile
                     Debug.Log("Added infantry unit to land object at: " + LandToMoveTo.transform.position.x.ToString() + "," + LandToMoveTo.transform.position.y.ToString());
                     landScript.infantryOnLand.Add(gameObject);
-                    if (landScript.infantryOnLand.Count > 1)
+                    if (GameplayManager.instance.currentGamePhase != "Retreat Units" || LandToMoveTo.GetComponent<NetworkIdentity>().netId != GameplayManager.instance.currentBattleSite)
                     {
-                        landScript.MultipleUnitsUIText("infantry");
-                        Debug.Log("More than 1 infantry on land");
+                        Debug.Log("Unit NOT moving back to battle site during retreat.");
+                        if (landScript.infantryOnLand.Count > 1)
+                        {
+                            landScript.MultipleUnitsUIText("infantry");
+                            Debug.Log("More than 1 infantry on land");
+                        }
                     }
-
+                    else if (GameplayManager.instance.currentGamePhase == "Retreat Units" && LandToMoveTo.GetComponent<NetworkIdentity>().netId == GameplayManager.instance.currentBattleSite)
+                    {
+                        Debug.Log("Unit moved back to battle site during retreat");
+                        if (ownerPlayerNumber == 1)
+                            landScript.Player1Inf.Add(this.gameObject);
+                        if (ownerPlayerNumber == 2)
+                            landScript.Player2Inf.Add(this.gameObject);
+                        landScript.RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
+                    }
                 }
                 else if (gameObject.tag == "tank")
                 {
                     //Remove unit from previous land tile
                     Debug.Log("Removed tank from previous land object at: " + currentLandOccupied.transform.position.x.ToString() + "," + currentLandOccupied.transform.position.y.ToString());
-                    currentLandOccupied.GetComponent<LandScript>().tanksOnLand.Remove(gameObject);
-                    currentLandOccupied.GetComponent<LandScript>().UpdateUnitText();
-
-                    //Add unit to new land tile
-                    Debug.Log("Added tank unit to land object at: " + LandToMoveTo.transform.position.x.ToString() + "," + LandToMoveTo.transform.position.y.ToString());
-                    landScript.tanksOnLand.Add(gameObject);
-                    if (landScript.tanksOnLand.Count > 1)
+                    if (GameplayManager.instance.currentGamePhase == "Retreat Units" && currentLandOccupied.GetComponent<NetworkIdentity>().netId == GameplayManager.instance.currentBattleSite)
                     {
-                        landScript.MultipleUnitsUIText("tank");
-                        Debug.Log("More than 1 tank on land");
+                        currentLandOccupiedScript.tanksOnLand.Remove(gameObject);
+                        if (currentLandOccupiedScript.Player1Tank.Contains(this.gameObject))
+                            currentLandOccupiedScript.Player1Tank.Remove(this.gameObject);
+                        if (currentLandOccupiedScript.Player2Tank.Contains(this.gameObject))
+                            currentLandOccupiedScript.Player2Tank.Remove(this.gameObject);
+                    }
+                    else
+                    {
+                        currentLandOccupiedScript.tanksOnLand.Remove(gameObject);
+                        currentLandOccupiedScript.UpdateUnitText();
+                    }
+
+                    //Add Unit to new land tile
+                    Debug.Log("Added infantry unit to land object at: " + LandToMoveTo.transform.position.x.ToString() + "," + LandToMoveTo.transform.position.y.ToString());
+                    landScript.tanksOnLand.Add(gameObject);
+                    if (GameplayManager.instance.currentGamePhase != "Retreat Units" || LandToMoveTo.GetComponent<NetworkIdentity>().netId != GameplayManager.instance.currentBattleSite)
+                    {
+                        if (landScript.tanksOnLand.Count > 1)
+                        {
+                            landScript.MultipleUnitsUIText("tank");
+                            Debug.Log("More than 1 tank on land");
+                        }
+                    }
+                    else if (GameplayManager.instance.currentGamePhase == "Retreat Units" && LandToMoveTo.GetComponent<NetworkIdentity>().netId == GameplayManager.instance.currentBattleSite)
+                    {
+                        Debug.Log("Unit moved back to battle site during retreat");
+                        if (ownerPlayerNumber == 1)
+                            landScript.Player1Tank.Add(this.gameObject);
+                        if (ownerPlayerNumber == 2)
+                            landScript.Player2Tank.Add(this.gameObject);
+                        landScript.RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
                     }
                 }
                 // Remove the land highlight when a unit moves
@@ -139,6 +195,11 @@ public class UnitScript : NetworkBehaviour
             Debug.Log("Unit moved distance of: " + disFromCurrentLocation.ToString("0.00"));
 
             currentLandOccupied = LandToMoveTo;
+        }
+        else if (currentLandOccupied == LandToMoveTo && GameplayManager.instance.currentGamePhase == "Retreat Units" && LandToMoveTo.GetComponent<NetworkIdentity>().netId == GameplayManager.instance.currentBattleSite)
+        {
+            Debug.Log("Unit that was already on current battle site moved back to battle site again.");
+            landScript.RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
         }
 
     }
@@ -225,7 +286,9 @@ public class UnitScript : NetworkBehaviour
         {
             if (requestingPlayer.playerUnitNetIds.Contains(unitId))
             {
-                totalUnitsToMove++;
+                // make sure that units selected already on the land clicked aren't counted twice against the "total units to move" count
+                if(!unitsSelected.Contains(NetworkIdentity.spawned[unitId].gameObject))
+                    totalUnitsToMove++;
             }
         }
         Debug.Log("Running CmdServerCanUnitsMove for: " + connectionToClient.ToString());
@@ -273,7 +336,24 @@ public class UnitScript : NetworkBehaviour
                 return;
             }
         }
-        if (GameplayManager.instance.currentGamePhase == "Unit Movement")
+        if (GameplayManager.instance.currentGamePhase == "Retreat Units")
+        {
+            // make sure retreating player is not retreating to a land tile that has an enemy on it
+            if (landUserClicked.GetComponent<NetworkIdentity>().netId != GameplayManager.instance.currentBattleSite)
+            {
+                foreach (KeyValuePair<uint, int> unitsAndPlayer in landScript.UnitNetIdsAndPlayerNumber)
+                {
+                    if (unitsAndPlayer.Value != requestingPlayer.playerNumber)
+                    {
+                        Debug.Log("CmdServerCanUnitsMove: Player cannot retreat here. This land has an opposing player's unit on it");
+                        TargetReturnCanUnitsMove(connectionToClient, false, landUserClicked, positionToMoveTo);
+                        return;
+                    }
+                }
+            }
+            
+        }
+        if (GameplayManager.instance.currentGamePhase == "Unit Movement" || GameplayManager.instance.currentGamePhase == "Retreat Units")
         {
             bool canMove = false;
             foreach (GameObject unit in unitsSelected)
@@ -296,6 +376,7 @@ public class UnitScript : NetworkBehaviour
             TargetReturnCanUnitsMove(connectionToClient, canMove, landUserClicked, positionToMoveTo);
             return;
         }
+        Debug.Log("CmdServerCanUnitsMove: player's requested move did not pass any checks. Defaulting to failure.");
         TargetReturnCanUnitsMove(connectionToClient, false, landUserClicked, positionToMoveTo);
         return;
     }
@@ -387,6 +468,26 @@ public class UnitScript : NetworkBehaviour
         {
             unitDeadIconObject = Instantiate(unitDeadIconPrefab, transform.position, Quaternion.identity);
             unitDeadIconObject.transform.SetParent(gameObject.transform);
+        }
+    }
+    private void OnDestroy()
+    {
+        if (currentLandOccupied)
+        {
+            LandScript landScript = currentLandOccupied.GetComponent<LandScript>();
+            if (landScript.tanksOnLand.Contains(this.gameObject))
+                landScript.tanksOnLand.Remove(this.gameObject);
+            if (landScript.infantryOnLand.Contains(this.gameObject))
+                landScript.infantryOnLand.Remove(this.gameObject);
+            if (landScript.Player1Inf.Contains(this.gameObject))
+                landScript.Player1Inf.Remove(this.gameObject);
+            if (landScript.Player1Tank.Contains(this.gameObject))
+                landScript.Player1Tank.Remove(this.gameObject);
+            if (landScript.Player2Inf.Contains(this.gameObject))
+                landScript.Player2Inf.Remove(this.gameObject);
+            if (landScript.Player2Tank.Contains(this.gameObject))
+                landScript.Player2Tank.Remove(this.gameObject);
+            landScript.RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
         }
     }
 }

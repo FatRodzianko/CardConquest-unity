@@ -159,6 +159,7 @@ public class PlayerHand : NetworkBehaviour
     }
     public void AddCardBackToHand(GameObject cardToAdd)
     {
+        Debug.Log("Executing AddCardBackToHand for card: " + cardToAdd);
         if (Hand.Contains(cardToAdd))
             return;
         Hand.Add(cardToAdd);
@@ -185,9 +186,11 @@ public class PlayerHand : NetworkBehaviour
     [ClientRpc]
     void RpcMoveCardToDiscard(uint cardtoDiscardNetId)
     {
+        Debug.Log("Executing RpcMoveCardToDiscard to discard card with net id: " + cardtoDiscardNetId.ToString() + " for player: " + ownerPlayerName);
         GameObject cardToDiscard = NetworkIdentity.spawned[cardtoDiscardNetId].gameObject;
         if (cardToDiscard)
         {
+            Debug.Log("RpcMoveCardToDiscard: Moving this card to discard: " + cardToDiscard);
             if (Hand.Contains(cardToDiscard))
                 Hand.Remove(cardToDiscard);
             if (!DiscardPile.Contains(cardToDiscard))

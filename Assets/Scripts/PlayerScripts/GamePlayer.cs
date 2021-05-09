@@ -560,11 +560,38 @@ public class GamePlayer : NetworkBehaviour
             }
             if (Game.CurrentGamePhase == "Battle Results")
             {
-                Game.CurrentGamePhase = "Retreat Units";
-                Debug.Log("Game phase changed to Retreat Units");
-                //CheckWhichPlayersNeedToRetreat();
+                AfterBattleCleanUp();
+                bool unitsLeftToRetreat = CheckIfUnitsAreLeftToRetreat();
+                if (unitsLeftToRetreat)
+                {
+                    Debug.Log("Units left to retreat");
+                    Game.CurrentGamePhase = "Retreat Units";
+                    Debug.Log("Game phase changed to Retreat Units");
+                }
+                else 
+                {
+                    Debug.Log("There are no remaining units left to retreat.");
+                }              
+                
                 DestroyUnitsLostInBattle();
                 MovePlayedCardToDiscard();
+                RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
+                return;
+            }
+            if (Game.CurrentGamePhase == "Retreat Units")
+            {
+                bool didAllUnitsRetreat = VerifyAllUnitsRetreated();
+                if (didAllUnitsRetreat)
+                {
+                    Debug.Log("Server: All players retreated.");
+                    CleanupPreviousBattleInfo();
+                    bool moreBattles = CheckForMoreBattles();
+                    if (moreBattles)
+                    {
+                        Debug.Log("At least one more battle to fight. Moving to the next battle.");
+                        ChangeToNextBattle();
+                    }                    
+                }
                 RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
                 return;
             }
@@ -710,7 +737,12 @@ public class GamePlayer : NetworkBehaviour
         {
             Debug.Log("Running HandleBattleScoreSet as a client.");
             GameplayManager.instance.CheckIfAllPlayerBattleScoresSet();
-        }    
+        }
+        else if (!newValue)
+        {
+            Debug.Log("Running HandleBattleScoreSet as a client. isPlayerBattleScoreSet set to false");
+            Debug.Log("Value of isPlayerBattleScoreSet for player " + this.PlayerName + " is: " + this.isPlayerBattleScoreSet.ToString() + " value of new value is: " + newValue.ToString());
+        }
         
     }
     public void SelectThisCard(GameObject playerCard)
@@ -744,7 +776,7 @@ public class GamePlayer : NetworkBehaviour
         {
             playerBattleCardNetId = newValue;
         }
-        if (isClient)
+        if (isClient && newValue != 0)
         {
             Debug.Log("Running HandleUpdatedPlayerBattleCard as a client");
             if (hasAuthority)
@@ -752,6 +784,10 @@ public class GamePlayer : NetworkBehaviour
                 GameplayManager.instance.HidePlayerHandPressed();
                 RemoveSelectedCardFromHandAndReposition(newValue);
             }                
+        }
+        if (isClient && newValue == 0)
+        {
+            selectedCard = null;
         }
     }
     void RemoveSelectedCardFromHandAndReposition(uint SelectedCardNetId)
@@ -1005,7 +1041,7 @@ public class GamePlayer : NetworkBehaviour
                 float distanceFromBattle = Vector3.Distance(battleSiteLand.transform.position, landObject.gameObject.transform.position);
                 if (distanceFromBattle < 3.01f)
                 {
-                    Debug.Log("Can retret to " + landObject.gameObject + ". Distance from battlesite: " + distanceFromBattle.ToString("0.00") + ". " + battleSiteLand.transform.position + " " + landObject.gameObject.transform.position);
+                    Debug.Log("Can retreat to " + landObject.gameObject + ". Distance from battlesite: " + distanceFromBattle.ToString("0.00") + ". " + battleSiteLand.transform.position + " " + landObject.gameObject.transform.position);
                     LandScript landScript = landObject.gameObject.GetComponent<LandScript>();
                     landsToRetreatTo.Add(landScript);
                 }
@@ -1179,6 +1215,7 @@ public class GamePlayer : NetworkBehaviour
             if(battlePlayer.playerCardHandNetIds.Contains(battlePlayer.playerBattleCardNetId))
                 battlePlayer.myPlayerCardHand.GetComponent<PlayerHand>().MoveCardToDiscard(battlePlayer.playerBattleCardNetId);
         }
+        RpcClearSelectedCard();
     }
     [Server]
     void DestroyUnitsLostInBattle()
@@ -1195,8 +1232,20 @@ public class GamePlayer : NetworkBehaviour
                 {
                     if (gamePlayer.ConnectionId == unitNetIdScript.ownerConnectionId && gamePlayer.playerNumber == unitNetIdScript.ownerPlayerNumber)
                     {
+                        // Remove the unit net ids from the player's list of units and their army list
                         if (gamePlayer.playerUnitNetIds.Contains(unitNetId))
                             gamePlayer.playerUnitNetIds.Remove(unitNetId);
+                        if (gamePlayer.playerArmyNetIds.Contains(unitNetId))
+                            gamePlayer.playerArmyNetIds.Remove(unitNetId);
+
+                        //Check the battle site's lists for the units that were destroyed and remove them from that list
+                        LandScript battleSiteScript = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject.GetComponent<LandScript>();
+                        if (battleSiteScript.UnitNetIdsOnLand.Contains(unitNetId))
+                            battleSiteScript.UnitNetIdsOnLand.Remove(unitNetId);
+                        if (battleSiteScript.UnitNetIdsAndPlayerNumber.ContainsKey(unitNetId))
+                            battleSiteScript.UnitNetIdsAndPlayerNumber.Remove(unitNetId);
+
+                        //RpcRemoveUnitFromLandLists(GameplayManager.instance.currentBattleSite, unitNetIdScript.gameObject);
                         break;
                     } 
                 }
@@ -1207,5 +1256,166 @@ public class GamePlayer : NetworkBehaviour
                 unitToDestroy = null;
             }
         }
+    }
+    [Server]
+    bool CheckIfUnitsAreLeftToRetreat()
+    {
+        bool areAnyUnitsLeftToRetreat = false;
+        foreach (GamePlayer player in Game.GamePlayers)
+        {
+            if (player.doesPlayerNeedToRetreat)
+            {
+                foreach (uint unit in player.playerArmyNetIds)
+                {
+                    if (!GameplayManager.instance.unitNetIdsLost.Contains(unit))
+                    {
+                        Debug.Log("At least one unit left to retreat");
+                        areAnyUnitsLeftToRetreat = true;
+                        break;
+                    }
+                }
+            }
+            if (areAnyUnitsLeftToRetreat)
+                break;
+        }
+        return areAnyUnitsLeftToRetreat;
+    }
+    [Server]
+    void AfterBattleCleanUp()
+    {
+        //Reset a bunch of syncvars and stuff back to false that were set during previous battle scenario
+        GameplayManager.instance.HandleAreBattleResultsSet(GameplayManager.instance.areBattleResultsSet, false);
+        GameplayManager.instance.HandleAreUnitsLostCalculated(GameplayManager.instance.unitsLostCalculated,false);
+        GameplayManager.instance.HandleUnitsLostFromRetreat(GameplayManager.instance.unitsLostFromRetreat, false);
+        List<GamePlayer> battlePlayers = new List<GamePlayer>();
+        foreach (GamePlayer player in Game.GamePlayers)
+        {
+            RpcUpdateIsPlayerBattleScoreSet();
+        }
+        
+    }
+    [Server]
+    bool VerifyAllUnitsRetreated()
+    {
+        Debug.Log("Executing VerifyAllUnitsRetreated on the server.");
+        bool allUnitsRetreated = false;
+
+        GameObject battleSite = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject;
+
+        foreach (GamePlayer gamePlayer in Game.GamePlayers)
+        {
+            if (gamePlayer.doesPlayerNeedToRetreat)
+            {
+                Debug.Log("VerifyAllUnitsRetreated: Retreating player found: " + gamePlayer.PlayerName);
+                foreach (uint unitToRetreatNetId in gamePlayer.playerArmyNetIds)
+                {
+                    GameObject unitToRetreat = NetworkIdentity.spawned[unitToRetreatNetId].gameObject;
+                    if (unitToRetreat.GetComponent<UnitScript>().newPosition == battleSite.transform.position)
+                    {
+                        Debug.Log("VerifyAllUnitsRetreated: At least one unit HAS NOT retreated off the battle site");
+                        allUnitsRetreated = false;
+                        break;
+                    }
+                    else 
+                    {
+                        Debug.Log("VerifyAllUnitsRetreated: Unit has retreated from the battle site");
+                        allUnitsRetreated = true;
+                    }
+                }
+                if (!allUnitsRetreated)
+                {
+                    Debug.Log("VerifyAllUnitsRetreated: At least one unit did not retreat. Returning false");
+                    break;
+                }
+            }   
+        }
+        return allUnitsRetreated;
+    }
+    [Server]
+    void CleanupPreviousBattleInfo()
+    {
+        //Remove the previous battle site from the list of battle sites based on its battle number
+        if(GameplayManager.instance.battleNumber != 0)
+            GameplayManager.instance.battleSiteNetIds.Remove(GameplayManager.instance.battleNumber);
+        //RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(GameplayManager.instance.currentBattleSite);
+        GameplayManager.instance.RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(GameplayManager.instance.currentBattleSite);
+    }
+    /*
+    [ClientRpc]
+    public void RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(uint battleSiteNetId)
+    {
+        Debug.Log("RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle: Instructing player to remove battle highlight and text on land with net id: battleSiteNetId");
+        LandScript battleSiteScript = NetworkIdentity.spawned[battleSiteNetId].gameObject.GetComponent<LandScript>();
+        battleSiteScript.RemoveBattleSiteHighlightAndText();
+        battleSiteScript.ResetUnitPositionAndUnitTextAfterBattle();
+    }
+    */
+    [Server]
+    bool CheckForMoreBattles()
+    {
+        Debug.Log("Executing CheckForMoreBattles");
+        bool moreBattles = false;
+        if (GameplayManager.instance.battleSiteNetIds.Count > 0)
+        {
+            Debug.Log("CheckForMoreBattles: More battle remain to fight.");
+            moreBattles = true;
+        }   
+        return moreBattles;
+    }
+    [Server]
+    void ChangeToNextBattle()
+    {
+        Debug.Log("Executing ChangeToNextBattle on the server.");
+        GameplayManager.instance.battleNumber++;
+        if (GameplayManager.instance.battleSiteNetIds.ContainsKey(GameplayManager.instance.battleNumber))
+        {
+            GameplayManager.instance.HandleCurrentBattleSiteUpdate(GameplayManager.instance.currentBattleSite, GameplayManager.instance.battleSiteNetIds[GameplayManager.instance.battleNumber]);
+            Game.CurrentGamePhase = "Choose Cards:\nBattle #" + GameplayManager.instance.battleNumber.ToString();
+            Debug.Log("ChangeToNextBattle: Game phase changed to " + Game.CurrentGamePhase);
+        }
+    }
+    [ClientRpc]
+    void RpcUpdateIsPlayerBattleScoreSet()
+    {
+        GameObject LocalGamePlayer = GameObject.Find("LocalGamePlayer");
+        GamePlayer LocalGamePlayerScript = LocalGamePlayer.GetComponent<GamePlayer>();
+        LocalGamePlayerScript.UpdateIsPlayerBattleScoreSet();
+    }
+    public void UpdateIsPlayerBattleScoreSet()
+    {
+        if (hasAuthority)
+        {
+            if (isPlayerBattleScoreSet)
+                CmdUpdateIsPlayerBattleScoreSet();
+        }
+    }
+    [Command]
+    void CmdUpdateIsPlayerBattleScoreSet()
+    {
+        
+        NetworkIdentity networkIdentity = connectionToClient.identity;
+        GamePlayer requestingPlayer = networkIdentity.GetComponent<GamePlayer>();
+        Debug.Log("Executing CmdUpdateIsPlayerBattleScoreSet for " + requestingPlayer.PlayerName);
+        requestingPlayer.HandleBattleScoreSet(requestingPlayer.isPlayerBattleScoreSet, false);
+    }
+    [ClientRpc]
+    void RpcClearSelectedCard()
+    {
+        GameObject LocalGamePlayer = GameObject.Find("LocalGamePlayer");
+        GamePlayer LocalGamePlayerScript = LocalGamePlayer.GetComponent<GamePlayer>();
+        LocalGamePlayerScript.ClearSelectedCard();
+    }
+    public void ClearSelectedCard()
+    {
+        if (hasAuthority && selectedCard)
+            CmdClearSelectedCard();
+    }
+    [Command]
+    void CmdClearSelectedCard()
+    {
+        NetworkIdentity networkIdentity = connectionToClient.identity;
+        GamePlayer requestingPlayer = networkIdentity.GetComponent<GamePlayer>();
+        Debug.Log("Executing CmdClearSelectedCard for " + requestingPlayer.PlayerName);
+        requestingPlayer.HandleUpdatedPlayerBattleCard(playerBattleCardNetId, 0);
     }
 }
