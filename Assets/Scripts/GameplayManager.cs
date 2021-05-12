@@ -349,6 +349,7 @@ public class GameplayManager : NetworkBehaviour
         ActivateUnitMovementUI();
         SaveUnitStartingLocation();
         LocalGamePlayerScript.UpdateUnitPositions();
+        SetGamePhaseText();
     }
     void ActivateUnitMovementUI()
     {
@@ -397,7 +398,10 @@ public class GameplayManager : NetworkBehaviour
             showOpponentCardButton.SetActive(true);
         if (hideOpponentCardButton.activeInHierarchy)
             hideOpponentCardButton.SetActive(false);
-        
+
+        endUnitMovementButton.GetComponentInChildren<Text>().text = "End Unit Movement";
+
+
         if (LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().isPlayerViewingTheirHand)
         {
             LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
@@ -406,6 +410,17 @@ public class GameplayManager : NetworkBehaviour
         SaveUnitStartingLocation();
         if (!gamePlayerHandButtonsCreated)
             CreateGamePlayerHandButtons();
+        else
+        {
+            if (opponentHandButtons.Count > 0)
+            {
+                foreach (GameObject opponentHandButton in opponentHandButtons)
+                {
+                    opponentHandButton.transform.SetParent(UnitMovementUI.GetComponent<RectTransform>(), false);
+                    opponentHandButton.SetActive(false);
+                }
+            }
+        }
         if (opponentHandButtons.Count > 0)
         {
             foreach (GameObject opponentHandButton in opponentHandButtons)
@@ -419,6 +434,25 @@ public class GameplayManager : NetworkBehaviour
             playerHandBeingViewed = null;
             isPlayerViewingOpponentHand = false;
         }
+
+        //Verifying all unit text is available on land objects. Sometimes these get hidden after battles
+        GameObject allLand = GameObject.FindGameObjectWithTag("LandHolder");
+        foreach (Transform landObject in allLand.transform)
+        {
+            LandScript landScript = landObject.gameObject.GetComponent<LandScript>();
+            if(landScript.infantryOnLand.Count > 1 || landScript.tanksOnLand.Count > 1)
+                landScript.UnHideUnitText();
+        }
+        GameObject[] PlayerUnitHolders = GameObject.FindGameObjectsWithTag("PlayerUnitHolder");
+        foreach (GameObject unitHolder in PlayerUnitHolders)
+        {
+            foreach (Transform unitChild in unitHolder.transform)
+            {
+                if (!unitChild.gameObject.activeInHierarchy)
+                    unitChild.gameObject.SetActive(true);
+            }            
+        }
+
 
     }
     public void UnitsHaveMoved()
@@ -615,7 +649,7 @@ public class GameplayManager : NetworkBehaviour
             currentGamePhase = newGamePhase;
             EndUnitPlacementPhase();
         }
-        if (currentGamePhase == "Unit Movement" && newGamePhase == "Unit Movement")
+        if ((currentGamePhase == "Unit Movement" || currentGamePhase == "Retreat Units" || currentGamePhase == "Battle Results") && newGamePhase == "Unit Movement")
         {
             MouseClickManager.instance.canSelectUnitsInThisPhase = true;
             MouseClickManager.instance.canSelectPlayerCardsInThisPhase = false;
@@ -629,7 +663,7 @@ public class GameplayManager : NetworkBehaviour
             currentGamePhase = newGamePhase;
             StartBattlesDetected();
         }
-        if ((currentGamePhase == "Battle(s) Detected" || currentGamePhase == "Retreat Units") && newGamePhase.StartsWith("Choose Cards"))
+        if ((currentGamePhase == "Battle(s) Detected" || currentGamePhase == "Retreat Units" || currentGamePhase == "Battle Results") && newGamePhase.StartsWith("Choose Cards"))
         {
             MouseClickManager.instance.canSelectUnitsInThisPhase = false;
             MouseClickManager.instance.canSelectPlayerCardsInThisPhase = true;
@@ -942,6 +976,8 @@ public class GameplayManager : NetworkBehaviour
         showOpponentCardButton.transform.SetParent(BattlesDetectedPanel.GetComponent<RectTransform>(), false);
         hideOpponentCardButton.transform.SetParent(BattlesDetectedPanel.GetComponent<RectTransform>(), false);
 
+        startBattlesButton.GetComponentInChildren<Text>().text = "Start Battles";
+
         if (hidePlayerHandButton.activeInHierarchy)
             hidePlayerHandButton.SetActive(false);
         if (!showPlayerHandButton.activeInHierarchy)
@@ -997,6 +1033,8 @@ public class GameplayManager : NetworkBehaviour
         Debug.Log("BattleSitesHaveBeenSet has been set to: " + newValue.ToString());
         if (newValue)
             HighlightBattleSites();
+        else if (!newValue)
+            haveBattleSitesBeenDone = false;
     }
     public void CheckIfAllUpdatedUnitPositionsForBattleSites()
     {
@@ -1067,7 +1105,8 @@ public class GameplayManager : NetworkBehaviour
             showOpponentCardButton.SetActive(true);
         if (hideOpponentCardButton.activeInHierarchy)
             hideOpponentCardButton.SetActive(false);
-
+        if (confirmCardButton.activeInHierarchy)
+            confirmCardButton.SetActive(false);
         confirmCardButton.GetComponentInChildren<Text>().text = "Confirm Card";
 
 
@@ -1220,18 +1259,41 @@ public class GameplayManager : NetworkBehaviour
             Debug.Log("CheckIfAllPlayerBattleScoresSet: all gameplayers are ready!");
             CreateBattlePanels();
         }
+        else if (!haveAllBattleScoresBeenSet && battleNumber > 1)
+        {
+            Debug.Log("CheckIfAllPlayerBattleScoresSet: Not all players are ready. After first battle, so updating anyway.");
+            CreateBattlePanels();
+        }
     }
     void CreateBattlePanels()
     {
-        Debug.Log("Executing CreateBattlePanels");
+        Debug.Log("!!! Executing CreateBattlePanels");
         // Spawn the local player's battle panel
         if (localPlayerBattlePanel)
         {
+            Debug.Log("CreateBattlePanels: Destroying local player battle panel");
+            foreach (Transform child in localPlayerBattlePanel.transform)
+            {
+                if (child.tag == "Card")
+                {
+                    Debug.Log("Card object found as child of localPlayerBattlePanel. Removing as a child object.");
+                    child.transform.parent = null;
+                }
+            }
             Destroy(localPlayerBattlePanel);
             localPlayerBattlePanel = null;
         }
         if (opponentPlayerBattlePanel)
         {
+            Debug.Log("CreateBattlePanels: Destroying opponent player battle panel");
+            foreach (Transform child in opponentPlayerBattlePanel.transform)
+            {
+                if (child.tag == "Card")
+                {
+                    Debug.Log("Card object found as child of opponentPlayerBattlePanel. Removing as a child object.");
+                    child.transform.parent = null;
+                }
+            }
             Destroy(opponentPlayerBattlePanel);
             opponentPlayerBattlePanel = null;
         }
@@ -1618,7 +1680,7 @@ public class GameplayManager : NetworkBehaviour
         else
             HideUnitsOnMap();
     }
-    void HideUnitsOnMap()
+    public void HideUnitsOnMap()
     {
         HideNonBattleUnits();
         HideNonBattleLandTextAndHighlights();
@@ -1717,8 +1779,8 @@ public class GameplayManager : NetworkBehaviour
         Debug.Log("RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle: Instructing player to remove battle highlight and text on land with net id: battleSiteNetId");
         LandScript battleSiteScript = NetworkIdentity.spawned[battleSiteNetId].gameObject.GetComponent<LandScript>();
         battleSiteScript.RemoveBattleSiteHighlightAndText();
-        //LocalGamePlayerScript.UpdateUnitPositions();
-        //battleSiteScript.ResetUnitPositionAndUnitTextAfterBattle();
+        LocalGamePlayerScript.UpdateUnitPositions();
+        battleSiteScript.ResetUnitPositionAndUnitTextAfterBattle();
     }
 
 }

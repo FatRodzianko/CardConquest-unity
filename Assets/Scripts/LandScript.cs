@@ -61,8 +61,8 @@ public class LandScript : NetworkBehaviour
         //CheckIfUnitTextNeedsToBeRemoved();
     }
     public void MultipleUnitsUIText(string unitType)
-    {     
-
+    {
+        Debug.Log("Executing MultipleUnitsUIText for unit type: " + unitType);
         if (unitType == "infantry")
         {
             if (infText == null)
@@ -93,6 +93,17 @@ public class LandScript : NetworkBehaviour
                 tankText.transform.GetChild(0).GetComponent<TextMeshPro>().SetText("x" + tanksOnLand.Count.ToString());
             }
         }
+        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card"))
+        {
+            if (infText != null)
+            {
+                infText.SetActive(false);
+            }
+            if (tankText != null)
+            {
+                tankText.SetActive(false);
+            }
+        }
         multipleUnitsOnLand = true;    
 
     }
@@ -109,6 +120,7 @@ public class LandScript : NetworkBehaviour
     }
     public void UpdateUnitText()
     {
+        Debug.Log("Executing UpdateUnitText");
         if (infText != null)
         {
             Debug.Log("Updating inf text. Current number of infantry " + infantryOnLand.Count.ToString() + " on: " + this.gameObject.transform.position);
@@ -135,6 +147,17 @@ public class LandScript : NetworkBehaviour
                 tankText = null;
                 CollapseUnits();
             }                
+        }
+        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card"))
+        {
+            if (infText != null)
+            {
+                infText.SetActive(false);
+            }
+            if (tankText != null)
+            {
+                tankText.SetActive(false);
+            }
         }
         CheckIfMultipleUnitsOnLand();
     }
@@ -876,6 +899,7 @@ public class LandScript : NetworkBehaviour
             ExpandUnitsForBattleResults(Player1Tank, Player1Inf, -1);
             ExpandUnitsForBattleResults(Player2Tank, Player2Inf, 1);
         }
+        UpdateUnitText();
     }
     public void RemoveBattleSiteHighlightAndText()
     {
@@ -892,6 +916,7 @@ public class LandScript : NetworkBehaviour
     }
     public void ResetUnitPositionAndUnitTextAfterBattle()
     {
+        Debug.Log("Executing ResetUnitPositionAndUnitTextAfterBattle");
         // Clear out old army info since the battle is over
         Player1Inf.Clear();
         Player1Tank.Clear();
@@ -928,8 +953,25 @@ public class LandScript : NetworkBehaviour
         }
         // Create unit texts if multiple units are on the land
         if (infantryOnLand.Count > 1)
+        {
             MultipleUnitsUIText("infantry");
+            if (GameplayManager.instance.battleSiteNetIds.Count > 0)
+            {
+                Debug.Log("ResetUnitPositionAndUnitTextAfterBattle: Hiding inf text because of other battles");
+                if (infText.activeInHierarchy)
+                    infText.SetActive(false);
+            }
+            
+        }
         if (tanksOnLand.Count > 1)
+        {
             MultipleUnitsUIText("tank");
+            if (GameplayManager.instance.battleSiteNetIds.Count > 0)
+            {
+                Debug.Log("ResetUnitPositionAndUnitTextAfterBattle: Hiding tank text because of other battles");
+                if (tankText.activeInHierarchy)
+                    tankText.SetActive(false);
+            }
+        }      
     }
 }

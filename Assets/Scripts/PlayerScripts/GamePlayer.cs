@@ -555,12 +555,21 @@ public class GamePlayer : NetworkBehaviour
                 DetermineWhoWonBattle();
                 Game.CurrentGamePhase = "Battle Results";
                 Debug.Log("Game phase changed to Battle Results");
+
+                foreach (GamePlayer player in Game.GamePlayers)
+                {
+                    RpcUpdateIsPlayerBattleScoreSet();
+                }
+
                 RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
                 return;
             }
             if (Game.CurrentGamePhase == "Battle Results")
             {
                 AfterBattleCleanUp();
+                
+                MovePlayedCardToDiscard();
+                DestroyUnitsLostInBattle();
                 bool unitsLeftToRetreat = CheckIfUnitsAreLeftToRetreat();
                 if (unitsLeftToRetreat)
                 {
@@ -570,11 +579,25 @@ public class GamePlayer : NetworkBehaviour
                 }
                 else 
                 {
-                    Debug.Log("There are no remaining units left to retreat.");
-                }              
+                    Debug.Log("Server: There were no units left to retreat. Checking for another battle.");
+                    CleanupPreviousBattleInfo();
+                    bool moreBattles = CheckForMoreBattles();
+                    if (moreBattles)
+                    {
+                        Debug.Log("At least one more battle to fight. Moving to the next battle.");
+                        ChangeToNextBattle();
+                    }
+                    else
+                    {
+                        Game.CurrentGamePhase = "Unit Movement";
+                        Debug.Log("Changing phase to Unit Movement");
+                        RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
+                        return;
+                    }
+                }         
                 
-                DestroyUnitsLostInBattle();
-                MovePlayedCardToDiscard();
+                //DestroyUnitsLostInBattle();
+                //MovePlayedCardToDiscard();
                 RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
                 return;
             }
@@ -590,7 +613,14 @@ public class GamePlayer : NetworkBehaviour
                     {
                         Debug.Log("At least one more battle to fight. Moving to the next battle.");
                         ChangeToNextBattle();
-                    }                    
+                    }
+                    else
+                    {
+                        Game.CurrentGamePhase = "Unit Movement";
+                        Debug.Log("Changing phase to Unit Movement");
+                        RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
+                        return;
+                    }
                 }
                 RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
                 return;
@@ -650,7 +680,6 @@ public class GamePlayer : NetworkBehaviour
         }
         if (Game.CurrentGamePhase == "Battle(s) Detected")
             requestingPlayer.GetComponent<GamePlayer>().updatedUnitPositionsForBattleSites = true;
-
     }
     [Server]
     public bool CheckForPossibleBattles()
@@ -726,6 +755,7 @@ public class GamePlayer : NetworkBehaviour
         requestingPlayer.playerBattleScore = requestingPlayer.playerArmyNumberOfInf;
         requestingPlayer.playerBattleScore += (requestingPlayer.playerArmyNumberOfTanks * 2);
         HandleBattleScoreSet(requestingPlayer.isPlayerBattleScoreSet, true);
+        //RpcUpdatePlayerBattlePanels();
     }
     void HandleBattleScoreSet(bool oldValue, bool newValue)
     {
@@ -735,13 +765,13 @@ public class GamePlayer : NetworkBehaviour
         }
         if (isClient && newValue)
         {
-            Debug.Log("Running HandleBattleScoreSet as a client.");
+            Debug.Log("!!!! Running HandleBattleScoreSet as a client. New value set to true.");
             GameplayManager.instance.CheckIfAllPlayerBattleScoresSet();
         }
         else if (!newValue)
         {
-            Debug.Log("Running HandleBattleScoreSet as a client. isPlayerBattleScoreSet set to false");
-            Debug.Log("Value of isPlayerBattleScoreSet for player " + this.PlayerName + " is: " + this.isPlayerBattleScoreSet.ToString() + " value of new value is: " + newValue.ToString());
+            Debug.Log("!!!! Running HandleBattleScoreSet as a client. isPlayerBattleScoreSet set to false");
+            Debug.Log("!!!! Value of isPlayerBattleScoreSet for player " + this.PlayerName + " is: " + this.isPlayerBattleScoreSet.ToString() + " value of new value is: " + newValue.ToString());
         }
         
     }
@@ -1283,6 +1313,7 @@ public class GamePlayer : NetworkBehaviour
     [Server]
     void AfterBattleCleanUp()
     {
+        Debug.Log("Executing: AfterBattleCleanUp on the server");
         //Reset a bunch of syncvars and stuff back to false that were set during previous battle scenario
         GameplayManager.instance.HandleAreBattleResultsSet(GameplayManager.instance.areBattleResultsSet, false);
         GameplayManager.instance.HandleAreUnitsLostCalculated(GameplayManager.instance.unitsLostCalculated,false);
@@ -1290,7 +1321,7 @@ public class GamePlayer : NetworkBehaviour
         List<GamePlayer> battlePlayers = new List<GamePlayer>();
         foreach (GamePlayer player in Game.GamePlayers)
         {
-            RpcUpdateIsPlayerBattleScoreSet();
+            //RpcUpdateIsPlayerBattleScoreSet();
         }
         
     }
@@ -1337,6 +1368,8 @@ public class GamePlayer : NetworkBehaviour
         //Remove the previous battle site from the list of battle sites based on its battle number
         if(GameplayManager.instance.battleNumber != 0)
             GameplayManager.instance.battleSiteNetIds.Remove(GameplayManager.instance.battleNumber);
+        GameplayManager.instance.BattleSitesHaveBeenSet = false;
+        RpcUpdatedUnitPositionsForBattleSites();
         //RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(GameplayManager.instance.currentBattleSite);
         GameplayManager.instance.RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(GameplayManager.instance.currentBattleSite);
     }
@@ -1377,6 +1410,7 @@ public class GamePlayer : NetworkBehaviour
     [ClientRpc]
     void RpcUpdateIsPlayerBattleScoreSet()
     {
+        Debug.Log("Executing RpcUpdateIsPlayerBattleScoreSet for player: " + this.PlayerName);
         GameObject LocalGamePlayer = GameObject.Find("LocalGamePlayer");
         GamePlayer LocalGamePlayerScript = LocalGamePlayer.GetComponent<GamePlayer>();
         LocalGamePlayerScript.UpdateIsPlayerBattleScoreSet();
@@ -1385,14 +1419,18 @@ public class GamePlayer : NetworkBehaviour
     {
         if (hasAuthority)
         {
+            Debug.Log("UpdateIsPlayerBattleScoreSet call from local player object. isPlayerBattleScoreSet is set to: " + isPlayerBattleScoreSet.ToString() + " for player: " + this.PlayerName);
             if (isPlayerBattleScoreSet)
+            {
+                Debug.Log("Executing CmdUpdateIsPlayerBattleScoreSet to set isPlayerBattleScoreSet to false on the server.");
                 CmdUpdateIsPlayerBattleScoreSet();
+            }
+                
         }
     }
     [Command]
     void CmdUpdateIsPlayerBattleScoreSet()
-    {
-        
+    {        
         NetworkIdentity networkIdentity = connectionToClient.identity;
         GamePlayer requestingPlayer = networkIdentity.GetComponent<GamePlayer>();
         Debug.Log("Executing CmdUpdateIsPlayerBattleScoreSet for " + requestingPlayer.PlayerName);
@@ -1418,4 +1456,25 @@ public class GamePlayer : NetworkBehaviour
         Debug.Log("Executing CmdClearSelectedCard for " + requestingPlayer.PlayerName);
         requestingPlayer.HandleUpdatedPlayerBattleCard(playerBattleCardNetId, 0);
     }
+    [ClientRpc]
+    void RpcUpdatedUnitPositionsForBattleSites()
+    {
+        GameObject LocalGamePlayer = GameObject.Find("LocalGamePlayer");
+        GamePlayer LocalGamePlayerScript = LocalGamePlayer.GetComponent<GamePlayer>();
+        LocalGamePlayerScript.ResetUpdatedUnitPositionsForBattleSites();
+    }
+    void ResetUpdatedUnitPositionsForBattleSites()
+    {
+        if (hasAuthority)
+            CmdResetUpdatedUnitPositionsForBattleSites();
+    }
+    [Command]
+    void CmdResetUpdatedUnitPositionsForBattleSites()
+    {
+        NetworkIdentity networkIdentity = connectionToClient.identity;
+        GamePlayer requestingPlayer = networkIdentity.GetComponent<GamePlayer>();
+        Debug.Log("Executing CmdResetUpdatedUnitPositionsForBattleSites for " + requestingPlayer.PlayerName);
+        requestingPlayer.updatedUnitPositionsForBattleSites = false;
+    }
 }
+
