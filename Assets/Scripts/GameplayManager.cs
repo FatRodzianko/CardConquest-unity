@@ -663,7 +663,7 @@ public class GameplayManager : NetworkBehaviour
             currentGamePhase = newGamePhase;
             StartBattlesDetected();
         }
-        if ((currentGamePhase == "Battle(s) Detected" || currentGamePhase == "Retreat Units" || currentGamePhase == "Battle Results") && newGamePhase.StartsWith("Choose Cards"))
+        if ((currentGamePhase == "Battle(s) Detected" || currentGamePhase == "Retreat Units" || currentGamePhase == "Battle Results" || currentGamePhase == "New Battle Detected") && newGamePhase.StartsWith("Choose Cards"))
         {
             MouseClickManager.instance.canSelectUnitsInThisPhase = false;
             MouseClickManager.instance.canSelectPlayerCardsInThisPhase = true;
@@ -682,6 +682,13 @@ public class GameplayManager : NetworkBehaviour
             MouseClickManager.instance.canSelectPlayerCardsInThisPhase = false;
             currentGamePhase = newGamePhase;
             StartRetreatUnits();
+        }
+        if (currentGamePhase == "Retreat Units" && newGamePhase == "New Battle Detected")
+        {
+            MouseClickManager.instance.canSelectPlayerCardsInThisPhase = false;
+            MouseClickManager.instance.canSelectUnitsInThisPhase = false;
+            currentGamePhase = newGamePhase;
+            StartBattlesDetected();
         }
 
     }
@@ -977,6 +984,8 @@ public class GameplayManager : NetworkBehaviour
         hideOpponentCardButton.transform.SetParent(BattlesDetectedPanel.GetComponent<RectTransform>(), false);
 
         startBattlesButton.GetComponentInChildren<Text>().text = "Start Battles";
+        if (currentGamePhase == "New Battle Detected")
+            startBattlesButton.GetComponentInChildren<Text>().text = "Return to Battles";
 
         if (hidePlayerHandButton.activeInHierarchy)
             hidePlayerHandButton.SetActive(false);
@@ -1776,7 +1785,7 @@ public class GameplayManager : NetworkBehaviour
     [ClientRpc]
     public void RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(uint battleSiteNetId)
     {
-        Debug.Log("RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle: Instructing player to remove battle highlight and text on land with net id: battleSiteNetId");
+        Debug.Log("RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle: Instructing player to remove battle highlight and text on land with net id: " + battleSiteNetId.ToString());
         LandScript battleSiteScript = NetworkIdentity.spawned[battleSiteNetId].gameObject.GetComponent<LandScript>();
         battleSiteScript.RemoveBattleSiteHighlightAndText();
         LocalGamePlayerScript.UpdateUnitPositions();

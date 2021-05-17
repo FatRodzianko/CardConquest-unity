@@ -487,20 +487,22 @@ public class LandScript : NetworkBehaviour
         foreach (KeyValuePair<uint, int> units in UnitNetIdsAndPlayerNumber)
         {            
             GameObject unitObject = NetworkIdentity.spawned[units.Key].gameObject;
-            Vector3 newPosition = unitObject.transform.position;
+            //Vector3 newPosition = unitObject.transform.position;
+            Vector3 newPosition = this.transform.position;
             // Adjust units for player 1
             if (units.Value == 1)
-            {
-                
+            {                
                 if (unitObject.tag == "infantry")
                 {
                     newPosition.x -= 0.5f;
+                    newPosition.y -= 0.5f;
                     unitObject.transform.position = newPosition;
                     Player1Inf.Add(unitObject);
                 }
                 else if (unitObject.tag == "tank")
                 {
                     newPosition.x -= 0.7f;
+                    newPosition.y += 0.5f;
                     unitObject.transform.position = newPosition;
                     Player1Tank.Add(unitObject);
                 }
@@ -511,12 +513,14 @@ public class LandScript : NetworkBehaviour
                 if (unitObject.tag == "infantry")
                 {
                     newPosition.x += 0.5f;
+                    newPosition.y -= 0.5f;
                     unitObject.transform.position = newPosition;
                     Player2Inf.Add(unitObject);
                 }
                 else if (unitObject.tag == "tank")
                 {
                     newPosition.x += 0.7f;
+                    newPosition.y += 0.5f;
                     unitObject.transform.position = newPosition;
                     Player2Tank.Add(unitObject);
                 }
@@ -535,6 +539,16 @@ public class LandScript : NetworkBehaviour
         {
             Destroy(tankText);
             tankText = null;
+        }
+        if (BattleUnitTexts.Count > 0)
+        {
+            foreach (KeyValuePair<GameObject, int> text in BattleUnitTexts)
+            {
+                GameObject textToDestroy = text.Key;
+                Destroy(textToDestroy);
+                textToDestroy = null;
+            }
+            BattleUnitTexts.Clear();
         }
 
         //Spawn unit text for player 1

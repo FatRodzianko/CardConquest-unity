@@ -188,6 +188,18 @@ public class UnitScript : NetworkBehaviour
                         landScript.RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
                     }
                 }
+                if (GameplayManager.instance.currentGamePhase == "New Battle Detected")
+                {
+                    bool isNewLandABattleSite = false;
+                    uint landClickedOnNetId = LandToMoveTo.GetComponent<NetworkIdentity>().netId;
+                    foreach (KeyValuePair<int, uint> battleSites in GameplayManager.instance.battleSiteNetIds)
+                    {
+                        if (battleSites.Value == landClickedOnNetId)
+                            isNewLandABattleSite = true;
+                    }
+                    if (isNewLandABattleSite)
+                        landScript.MoveUnitsForBattleSite();
+                }
                 // Remove the land highlight when a unit moves
                 currentLandOccupied.GetComponent<LandScript>().RemoveHighlightLandArea();
             }
@@ -338,6 +350,37 @@ public class UnitScript : NetworkBehaviour
         }
         if (GameplayManager.instance.currentGamePhase == "Retreat Units")
         {
+            // Check where the units are in relation to the requesting player's base. Player's will only be able to retreat toward their own base, or to a tile with the same x value as the battle site
+            // If the base's x position is greater than the unit's x position, the player is player 2 and their base is to their right
+            // If it is less than the unit's position, the player is player 1 and the base is to the left
+            UnitScript firstUnitScript = unitsSelected[0].GetComponent<UnitScript>();
+            if (requestingPlayer.myPlayerBasePosition.x > firstUnitScript.startingPosition.x)
+            {
+                Debug.Log("Requesting player: " + requestingPlayer.PlayerName + "'s base is to their RIGHT. They can only retreat to the RIGHT.");
+                if (landUserClicked.transform.position.x < firstUnitScript.startingPosition.x)
+                {
+                    Debug.Log("Requesting player: " + requestingPlayer.PlayerName + " clicked on a land to the left of the battle site. Cannot retreat that direction.");
+                    TargetReturnCanUnitsMove(connectionToClient, false, landUserClicked, positionToMoveTo);
+                    return;
+                }
+            }
+            else if (requestingPlayer.myPlayerBasePosition.x < firstUnitScript.startingPosition.x)
+            {
+                Debug.Log("Requesting player: " + requestingPlayer.PlayerName + "'s base is to their LEFT. They can only retreat to the LEFT.");
+                if (landUserClicked.transform.position.x > firstUnitScript.startingPosition.x)
+                {
+                    Debug.Log("Requesting player: " + requestingPlayer.PlayerName + " clicked on a land to the left of the battle site. Cannot retreat that direction.");
+                    TargetReturnCanUnitsMove(connectionToClient, false, landUserClicked, positionToMoveTo);
+                    return;
+                }
+            }
+            else if (requestingPlayer.myPlayerBasePosition.x == firstUnitScript.startingPosition.x)
+            {
+                Debug.Log("Requesting player: " + requestingPlayer.PlayerName + "is retreating from their base? Player cannot retreat from their base.");
+                TargetReturnCanUnitsMove(connectionToClient, false, landUserClicked, positionToMoveTo);
+                return;
+            }
+
             // make sure retreating player is not retreating to a land tile that has an enemy on it
             if (landUserClicked.GetComponent<NetworkIdentity>().netId != GameplayManager.instance.currentBattleSite)
             {
@@ -345,9 +388,27 @@ public class UnitScript : NetworkBehaviour
                 {
                     if (unitsAndPlayer.Value != requestingPlayer.playerNumber)
                     {
-                        Debug.Log("CmdServerCanUnitsMove: Player cannot retreat here. This land has an opposing player's unit on it");
-                        TargetReturnCanUnitsMove(connectionToClient, false, landUserClicked, positionToMoveTo);
-                        return;
+                        if (GameplayManager.instance.reasonForWinning.StartsWith("Draw:"))
+                        {
+                            UnitScript unitOnLandScript = NetworkIdentity.spawned[unitsAndPlayer.Key].gameObject.GetComponent<UnitScript>();
+                            if (unitOnLandScript.startingPosition != landUserClicked.transform.position)
+                            {
+                                Debug.Log("CmdServerCanUnitsMove: Enemy unit on land BUT that unit retreated here. Allowing move.");
+                            }
+                            else if (unitOnLandScript.startingPosition == landUserClicked.transform.position)
+                            {
+                                Debug.Log("CmdServerCanUnitsMove: enemy unit on land AND that unit started here. Movement denied.");
+                                TargetReturnCanUnitsMove(connectionToClient, false, landUserClicked, positionToMoveTo);
+                                return;
+                            }
+                        }
+                        else
+                        {
+                            Debug.Log("CmdServerCanUnitsMove: Player cannot retreat here. This land has an opposing player's unit on it");
+                            TargetReturnCanUnitsMove(connectionToClient, false, landUserClicked, positionToMoveTo);
+                            return;
+                        }
+                        
                     }
                 }
             }
