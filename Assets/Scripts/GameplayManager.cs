@@ -1527,6 +1527,11 @@ public class GameplayManager : NetworkBehaviour
                 unitsLost.text += numberOfInfLost.ToString() + " infantry";
             }
         }
+        if (!unitsLostFromRetreat)
+        {
+            if (retreatingUnitsDestroyed.activeInHierarchy)
+                retreatingUnitsDestroyed.SetActive(false);
+        }
     }
     void ShowDeadUnits()
     {
@@ -1650,6 +1655,8 @@ public class GameplayManager : NetworkBehaviour
         }
         else if (!newValue)
         {
+            if (retreatingUnitsDestroyed.activeInHierarchy)
+                retreatingUnitsDestroyed.SetActive(false);
             localUnitsLostFromRetreat = false;
         }
     }
