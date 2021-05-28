@@ -374,9 +374,11 @@ public class GameplayManager : NetworkBehaviour
         hidePlayerHandButton.transform.SetParent(UnitMovementUI.GetComponent<RectTransform>(), false);
         showPlayerHandButton.transform.SetParent(UnitMovementUI.GetComponent<RectTransform>(), false);
         showPlayerHandButton.GetComponentInChildren<Text>().text = "Cards in Hand";
+        showPlayerDiscardButton.GetComponentInChildren<Text>().text = "Discard Pile";
         showPlayerDiscardButton.transform.SetParent(UnitMovementUI.GetComponent<RectTransform>(), false);
         showOpponentCardButton.transform.SetParent(UnitMovementUI.GetComponent<RectTransform>(), false);
         hideOpponentCardButton.transform.SetParent(UnitMovementUI.GetComponent<RectTransform>(), false);
+        
 
         if (!unitMovementNoUnitsMovedText.gameObject.activeInHierarchy)
             unitMovementNoUnitsMovedText.gameObject.SetActive(true);
@@ -401,11 +403,13 @@ public class GameplayManager : NetworkBehaviour
 
         endUnitMovementButton.GetComponentInChildren<Text>().text = "End Unit Movement";
 
-
+        
         if (LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().isPlayerViewingTheirHand)
         {
-            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
         }
+        
         // When the movement phase begins, save the land occupied by the unit to be used in movement resets
         SaveUnitStartingLocation();
         if (!gamePlayerHandButtonsCreated)
@@ -421,6 +425,8 @@ public class GameplayManager : NetworkBehaviour
                 }
             }
         }
+
+        
         if (opponentHandButtons.Count > 0)
         {
             foreach (GameObject opponentHandButton in opponentHandButtons)
@@ -430,11 +436,12 @@ public class GameplayManager : NetworkBehaviour
         }
         if (isPlayerViewingOpponentHand && playerHandBeingViewed != null)
         {
-            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
             playerHandBeingViewed = null;
             isPlayerViewingOpponentHand = false;
         }
-
+        
         //Verifying all unit text is available on land objects. Sometimes these get hidden after battles
         GameObject allLand = GameObject.FindGameObjectWithTag("LandHolder");
         foreach (Transform landObject in allLand.transform)
@@ -576,9 +583,10 @@ public class GameplayManager : NetworkBehaviour
             showPlayerHandButton.SetActive(false);
             unitMovementNoUnitsMovedText.gameObject.SetActive(false);
             hidePlayerHandButton.SetActive(true);
+            showPlayerDiscardButton.SetActive(false);
             //PlayerHand.instance.ShowPlayerHandOnScreen();
             MouseClickManager.instance.ClearUnitSelection();
-            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().ShowPlayerHandOnScreen();
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().ShowPlayerHandOnScreen("Hand");
         }
 
     }
@@ -588,6 +596,7 @@ public class GameplayManager : NetworkBehaviour
         {
             endUnitMovementButton.SetActive(true);
             showPlayerHandButton.SetActive(true);
+            showPlayerDiscardButton.SetActive(true);
 
             if (!LocalGamePlayerScript.ReadyForNextPhase)
             {
@@ -602,7 +611,7 @@ public class GameplayManager : NetworkBehaviour
             }
             hidePlayerHandButton.SetActive(false);
             //PlayerHand.instance.HidePlayerHandOnScreen();
-            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
             if (currentGamePhase.StartsWith("Choose Card"))
             {
                 MouseClickManager.instance.SelectCardClicked(MouseClickManager.instance.cardSelected);
@@ -903,6 +912,12 @@ public class GameplayManager : NetworkBehaviour
             buttonPos.y -= 50f;
             gamePlayerDiscardButton.GetComponent<RectTransform>().anchoredPosition = buttonPos;
             gamePlayerDiscardButton.GetComponentInChildren<Text>().text = gamePlayerScript.PlayerName + " Discard";
+
+            OpponentHandButtonScript gamePlayerDiscardButtonScript = gamePlayerDiscardButton.GetComponent<OpponentHandButtonScript>();
+            gamePlayerDiscardButtonScript.playerHandConnId = gamePlayerScript.ConnectionId;
+            gamePlayerDiscardButtonScript.playerHandOwnerName = gamePlayerScript.PlayerName;
+            gamePlayerDiscardButtonScript.FindOpponentHand();
+
             opponentHandButtons.Add(gamePlayerDiscardButton);
 
             gamePlayerHandButton.SetActive(false);
@@ -987,6 +1002,9 @@ public class GameplayManager : NetworkBehaviour
         if (currentGamePhase == "New Battle Detected")
             startBattlesButton.GetComponentInChildren<Text>().text = "Return to Battles";
 
+        showPlayerHandButton.GetComponentInChildren<Text>().text = "Cards in Hand";
+        showPlayerDiscardButton.GetComponentInChildren<Text>().text = "Discard Pile";
+
         if (hidePlayerHandButton.activeInHierarchy)
             hidePlayerHandButton.SetActive(false);
         if (!showPlayerHandButton.activeInHierarchy)
@@ -1002,7 +1020,8 @@ public class GameplayManager : NetworkBehaviour
 
         if (LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().isPlayerViewingTheirHand)
         {
-            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
         }
 
         if (opponentHandButtons.Count > 0)
@@ -1015,10 +1034,12 @@ public class GameplayManager : NetworkBehaviour
         }
         if (isPlayerViewingOpponentHand && playerHandBeingViewed != null)
         {
-            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
             playerHandBeingViewed = null;
             isPlayerViewingOpponentHand = false;
         }
+        
     }
     public void HighlightBattleSites()
     {
@@ -1086,6 +1107,7 @@ public class GameplayManager : NetworkBehaviour
     }
     void ActivateChooseCards()
     {
+        
         if (UnitMovementUI.activeInHierarchy)
             UnitMovementUI.SetActive(false);
         if (BattlesDetectedPanel.activeInHierarchy)
@@ -1120,10 +1142,12 @@ public class GameplayManager : NetworkBehaviour
 
 
         showPlayerHandButton.GetComponentInChildren<Text>().text = "Select Card";
+        showPlayerDiscardButton.GetComponentInChildren<Text>().text = "Discard Pile";
 
         if (LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().isPlayerViewingTheirHand)
         {
-            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
         }
 
         if (opponentHandButtons.Count > 0)
@@ -1136,10 +1160,12 @@ public class GameplayManager : NetworkBehaviour
         }
         if (isPlayerViewingOpponentHand && playerHandBeingViewed != null)
         {
-            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
             playerHandBeingViewed = null;
             isPlayerViewingOpponentHand = false;
         }
+        
 
         // make sure player's cards are clickable
         foreach (GameObject playerCard in LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().Hand)
@@ -1409,6 +1435,7 @@ public class GameplayManager : NetworkBehaviour
     }
     void ActivateBattleResultsUI()
     {
+        
         if (UnitMovementUI.activeInHierarchy)
             UnitMovementUI.SetActive(false);
         if (BattlesDetectedPanel.activeInHierarchy)
@@ -1426,15 +1453,18 @@ public class GameplayManager : NetworkBehaviour
 
         if (LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().isPlayerViewingTheirHand)
         {
-            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
         }
 
         if (isPlayerViewingOpponentHand && playerHandBeingViewed != null)
         {
-            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
             playerHandBeingViewed = null;
             isPlayerViewingOpponentHand = false;
         }
+        
         SetOpponentBattleScoreAndCard();
     }
     void SetOpponentBattleScoreAndCard()
@@ -1554,6 +1584,7 @@ public class GameplayManager : NetworkBehaviour
     }
     void ActivateRetreatUnitsUI()
     {
+        
         if (UnitMovementUI.activeInHierarchy)
             UnitMovementUI.SetActive(false);
         if (BattlesDetectedPanel.activeInHierarchy)
@@ -1567,12 +1598,12 @@ public class GameplayManager : NetworkBehaviour
         //Destroy battle panels as the battle is now over
         //Destroy(localPlayerBattlePanel);
         //Destroy(opponentPlayerBattlePanel);
-
+        
         //reset the camera size for unit movement
         Camera.main.orthographicSize = 7;
         Vector3 cameraPosition = new Vector3(-1.5f, 1.5f, -10f);
         Camera.main.transform.position = cameraPosition;
-
+        
         // Move buttons to the RetreatUnitsPanel
         hidePlayerHandButton.transform.SetParent(RetreatUnitsPanel.GetComponent<RectTransform>(), false);
         showPlayerHandButton.transform.SetParent(RetreatUnitsPanel.GetComponent<RectTransform>(), false);
@@ -1596,10 +1627,13 @@ public class GameplayManager : NetworkBehaviour
         if (endRetreatUnitsButton.activeInHierarchy)
             endRetreatUnitsButton.SetActive(false);
         endRetreatUnitsButton.GetComponentInChildren<Text>().text = "Done Retreating";
+        showPlayerHandButton.GetComponentInChildren<Text>().text = "Cards in Hand";
+        showPlayerDiscardButton.GetComponentInChildren<Text>().text = "Discard Pile";
 
         if (LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().isPlayerViewingTheirHand)
         {
-            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
         }
 
         if (opponentHandButtons.Count > 0)
@@ -1612,10 +1646,12 @@ public class GameplayManager : NetworkBehaviour
         }
         if (isPlayerViewingOpponentHand && playerHandBeingViewed != null)
         {
-            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
             playerHandBeingViewed = null;
             isPlayerViewingOpponentHand = false;
         }
+        
     }
     void CheckIfPlayerNeedsToRetreat()
     {
@@ -1797,6 +1833,180 @@ public class GameplayManager : NetworkBehaviour
         battleSiteScript.RemoveBattleSiteHighlightAndText();
         LocalGamePlayerScript.UpdateUnitPositions();
         battleSiteScript.ResetUnitPositionAndUnitTextAfterBattle();
+    }
+    public void ShowPlayerDiscardPressed()
+    {
+        bool isEscMenuOpen = false;
+        try
+        {
+            isEscMenuOpen = EscMenuManager.instance.IsMainMenuOpen;
+        }
+        catch
+        {
+            Debug.Log("Can't access EscMenuManager");
+        }
+
+        PlayerHand localPlayerHandScript = LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>();
+
+        if (!localPlayerHandScript.isPlayerViewingTheirHand && !isEscMenuOpen && localPlayerHandScript.DiscardPile.Count > 0)
+        {
+            //isPlayerViewingOpponentHand = true;
+
+            //Hide game objects?
+            endUnitMovementButton.SetActive(false);
+            resetAllMovementButton.SetActive(false);
+            showPlayerHandButton.SetActive(false);
+            unitMovementNoUnitsMovedText.gameObject.SetActive(false);
+
+            showPlayerDiscardButton.GetComponentInChildren<Text>().text = "Hide Discard";            
+            
+            localPlayerHandScript.ShowPlayerHandOnScreen("Discard");
+        }
+        else if (localPlayerHandScript.isPlayerViewingTheirHand && !isEscMenuOpen)
+        {
+            //isPlayerViewingOpponentHand = false;
+
+            //unhide buttons?
+            endUnitMovementButton.SetActive(true);
+            showPlayerHandButton.SetActive(true);
+
+            if (!LocalGamePlayerScript.ReadyForNextPhase)
+            {
+                if (haveUnitsMoved)
+                {
+                    resetAllMovementButton.SetActive(true);
+                }
+                else if (!haveUnitsMoved)
+                {
+                    unitMovementNoUnitsMovedText.gameObject.SetActive(true);
+                }
+            }
+            hidePlayerHandButton.SetActive(false);
+
+            localPlayerHandScript.HidePlayerHandOnScreen("Discard");
+
+            showPlayerDiscardButton.GetComponentInChildren<Text>().text = "Discard Pile";
+        }
+    }
+    void ActivateUIForPhase(GameObject panelToActivate)
+    {
+        //Deactivate all UI panels
+        if (UnitPlacementUI.activeInHierarchy)
+            UnitPlacementUI.SetActive(false);
+        if (UnitMovementUI.activeInHierarchy)
+            UnitMovementUI.SetActive(false);
+        if (BattlesDetectedPanel.activeInHierarchy)
+            BattlesDetectedPanel.SetActive(false);
+        if (ChooseCardsPanel.activeInHierarchy)
+            ChooseCardsPanel.SetActive(false);
+        if (BattleResultsPanel.activeInHierarchy)
+            BattleResultsPanel.SetActive(false);
+        if (RetreatUnitsPanel.activeInHierarchy)
+            RetreatUnitsPanel.SetActive(false);
+
+        //Activate the UI panel passed as the argument
+        if (!panelToActivate.activeInHierarchy)
+            panelToActivate.SetActive(true);
+
+        //Activate the "show cards" buttons
+        if (currentGamePhase != "Battle Results")
+        {
+            hidePlayerHandButton.transform.SetParent(panelToActivate.GetComponent<RectTransform>(), false);
+            showPlayerHandButton.transform.SetParent(panelToActivate.GetComponent<RectTransform>(), false);
+            showPlayerDiscardButton.transform.SetParent(panelToActivate.GetComponent<RectTransform>(), false);
+            showOpponentCardButton.transform.SetParent(panelToActivate.GetComponent<RectTransform>(), false);
+            hideOpponentCardButton.transform.SetParent(panelToActivate.GetComponent<RectTransform>(), false);
+
+            if (hidePlayerHandButton.activeInHierarchy)
+                hidePlayerHandButton.SetActive(false);
+            if (!showPlayerHandButton.activeInHierarchy)
+                showPlayerHandButton.SetActive(true);
+            if (!showPlayerDiscardButton.activeInHierarchy)
+                showPlayerDiscardButton.SetActive(true);
+            if (!showOpponentCardButton.activeInHierarchy)
+                showOpponentCardButton.SetActive(true);
+            if (hideOpponentCardButton.activeInHierarchy)
+                hideOpponentCardButton.SetActive(false);
+        }
+
+        if (currentGamePhase.StartsWith("Choose Cards"))
+        {
+            showPlayerHandButton.GetComponentInChildren<Text>().text = "Select Card";
+            showPlayerDiscardButton.GetComponentInChildren<Text>().text = "Discard Pile";
+        }
+        else
+        {
+            showPlayerHandButton.GetComponentInChildren<Text>().text = "Cards in Hand";
+            showPlayerDiscardButton.GetComponentInChildren<Text>().text = "Discard Pile";
+        }
+
+        //Reset button text specific for each phase
+        if (currentGamePhase == "Unit Movement")
+        {
+            endUnitMovementButton.GetComponentInChildren<Text>().text = "End Unit Movement";
+
+            if (!unitMovementNoUnitsMovedText.gameObject.activeInHierarchy)
+                unitMovementNoUnitsMovedText.gameObject.SetActive(true);
+            if (!endUnitMovementButton.activeInHierarchy)
+                endUnitMovementButton.SetActive(true);
+            if (endUnitMovementButton.activeInHierarchy)
+                endUnitMovementButton.GetComponent<Image>().color = Color.white;
+            if (resetAllMovementButton.activeInHierarchy)
+                resetAllMovementButton.SetActive(false);
+            //if (hidePlayerHandButton.activeInHierarchy && !PlayerHand.instance.isPlayerViewingTheirHand)
+            //hidePlayerHandButton.SetActive(false);
+
+        }
+        if (currentGamePhase == "Battle(s) Detected")
+            startBattlesButton.GetComponentInChildren<Text>().text = "Start Battles";
+        if (currentGamePhase.StartsWith("Choose Cards"))
+        {
+            if (confirmCardButton.activeInHierarchy)
+                confirmCardButton.SetActive(false);
+        }
+        if (currentGamePhase == "New Battle Detected")
+            startBattlesButton.GetComponentInChildren<Text>().text = "Return to Battles";
+        if (currentGamePhase == "Battle Results")
+        {
+            endBattleResultsButton.GetComponentInChildren<Text>().text = "Next Turn";
+            localPlayerBattlePanel.transform.SetParent(panelToActivate.GetComponent<RectTransform>(), false);
+            opponentPlayerBattlePanel.transform.SetParent(panelToActivate.GetComponent<RectTransform>(), false);
+        }
+        if (currentGamePhase == "Retreat Units")
+        {
+            if (resetRetreatingUnitsbutton.activeInHierarchy)
+                resetRetreatingUnitsbutton.SetActive(false);
+            if (endRetreatUnitsButton.activeInHierarchy)
+                endRetreatUnitsButton.SetActive(false);
+            endRetreatUnitsButton.GetComponentInChildren<Text>().text = "Done Retreating";
+        }
+
+        if (LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().isPlayerViewingTheirHand)
+        {
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            LocalGamePlayerScript.myPlayerCardHand.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
+        }
+
+        // Create the player hand buttons for opponents if they don't already exist
+        if (!gamePlayerHandButtonsCreated)
+            CreateGamePlayerHandButtons();
+
+        if (opponentHandButtons.Count > 0)
+        {
+            foreach (GameObject opponentHandButton in opponentHandButtons)
+            {
+                if(currentGamePhase != "Battle Results")
+                    opponentHandButton.transform.SetParent(panelToActivate.GetComponent<RectTransform>(), false);                
+                opponentHandButton.SetActive(false);
+            }
+        }
+        if (isPlayerViewingOpponentHand && playerHandBeingViewed != null)
+        {
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
+            playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
+            playerHandBeingViewed = null;
+            isPlayerViewingOpponentHand = false;
+        }
     }
 
 }

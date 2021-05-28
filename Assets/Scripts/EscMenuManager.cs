@@ -55,7 +55,7 @@ public class EscMenuManager : MonoBehaviour
             else if (Input.GetKeyDown(KeyCode.Escape) && LocalPlayerHandScript.isPlayerViewingTheirHand == false && GameplayManager.instance.isPlayerViewingOpponentHand == true)
             {
                 GameplayManager.instance.isPlayerViewingOpponentHand = false;
-                GameplayManager.instance.playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen();
+                GameplayManager.instance.playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Hand");
                 GameplayManager.instance.HideOpponentHandRestoreUI();
                 GameplayManager.instance.playerHandBeingViewed = null;
             }
