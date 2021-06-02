@@ -548,6 +548,13 @@ public class UnitScript : NetworkBehaviour
                 landScript.Player2Inf.Remove(this.gameObject);
             if (landScript.Player2Tank.Contains(this.gameObject))
                 landScript.Player2Tank.Remove(this.gameObject);
+            //remove the unit's network id from any lists in case it wasn't before. This can happen when the player leaves a game?
+            uint unitNetId = this.gameObject.GetComponent<NetworkIdentity>().netId;
+            if (landScript.UnitNetIdsOnLand.Contains(unitNetId))
+                landScript.UnitNetIdsOnLand.Remove(unitNetId);
+            if (landScript.UnitNetIdsAndPlayerNumber.ContainsKey(unitNetId))
+                landScript.UnitNetIdsAndPlayerNumber.Remove(unitNetId);
+
             landScript.RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
         }
     }

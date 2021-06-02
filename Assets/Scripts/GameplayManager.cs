@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using Mirror;
 using System.Linq;
 using System;
+using UnityEngine.SceneManagement;
 
 public class GameplayManager : NetworkBehaviour
 {
@@ -114,6 +115,18 @@ public class GameplayManager : NetworkBehaviour
     [SerializeField] private GameObject resetRetreatingUnitsbutton;
     public bool haveUnitsRetreated = false;
 
+    [Header("End Game UI")]
+    [SerializeField] private GameObject EndGamePanel;
+    [SerializeField] private GameObject GameLoserTextObjects;
+    [SerializeField] private Text ReasonForLossText;
+    [SerializeField] private GameObject GameWinnerTextObjects;
+
+    [Header("Player Base Defense")]
+    [SerializeField] public GameObject PlayerBaseDefenseObjects;
+    [SerializeField] private Text DefeatEnemyText;
+    [SyncVar(hook = nameof(HandleIsPlayerBaseDefense))] public bool isPlayerBaseDefense = false;
+    [SerializeField] public GameObject BattleResultsBaseDefenseObjects;
+    [SerializeField] private Text WinOrLoseDefenseText;
 
     // Start is called before the first frame update
     void Awake()
@@ -1487,6 +1500,15 @@ public class GameplayManager : NetworkBehaviour
             opponentCardText.SetActive(true);
             opponentCardPower.SetActive(true);
         }
+        if (isPlayerBaseDefense)
+        {
+            Debug.Log("SetOpponentBattleScoreAndCard: Battle was a base defense.");
+            BattleResultsBaseDefenseObjects.SetActive(true);
+        }
+        else
+        {
+            BattleResultsBaseDefenseObjects.SetActive(false);
+        }
     }
     public void HandleAreBattleResultsSet(bool oldValue, bool newValue)
     {
@@ -1510,11 +1532,64 @@ public class GameplayManager : NetworkBehaviour
         winnerName.text = winnerOfBattleName;
         victoryCondition.text = reasonForWinning;
         updateResultsPanelLocal = true;
-        if (reasonForWinning == "Draw: No Winner")
+        if (reasonForWinning == "Draw: No Winner" && !isPlayerBaseDefense)
         {
             unitsLost.text = "No units lost";
             NetworkIdentity.spawned[currentBattleSite].gameObject.GetComponent<LandScript>().ExpandForTie();
-        }       
+        }
+        if (isPlayerBaseDefense)
+        {
+            Debug.Log("UpdateResultsPanel: battle was a base defense");
+            if (reasonForWinning != "Draw: No Winner")
+            {
+                if (LocalGamePlayerScript.myPlayerBasePosition == NetworkIdentity.spawned[currentBattleSite].gameObject.transform.position)
+                {
+                    Debug.Log("UpdateResultsPanel: Local player was defending their base!");
+                    if (winnerOfBattleName == LocalGamePlayerScript.PlayerName && winnerOfBattlePlayerConnId == LocalGamePlayerScript.ConnectionId && winnerOfBattlePlayerNumber == LocalGamePlayerScript.playerNumber)
+                    {
+                        Debug.Log("Player defended their base!");
+                        WinOrLoseDefenseText.text = "Defense Successful!";
+                    }
+                    else if (loserOfBattleName == LocalGamePlayerScript.PlayerName && loserOfBattlePlayerConnId == LocalGamePlayerScript.ConnectionId && loserOfBattlePlayerNumber == LocalGamePlayerScript.playerNumber)
+                    {
+                        Debug.Log("player failed to defend their base!");
+                        WinOrLoseDefenseText.text = "Defense Failed...";
+                    }
+                }
+                else
+                {
+                    Debug.Log("UpdateResultsPanel: Local player attacking enemy base");
+                    if (winnerOfBattleName == LocalGamePlayerScript.PlayerName && winnerOfBattlePlayerConnId == LocalGamePlayerScript.ConnectionId && winnerOfBattlePlayerNumber == LocalGamePlayerScript.playerNumber)
+                    {
+                        Debug.Log("Player captured enemy base");
+                        WinOrLoseDefenseText.text = "Enemy base captured!";
+                    }
+                    else if (loserOfBattleName == LocalGamePlayerScript.PlayerName && loserOfBattlePlayerConnId == LocalGamePlayerScript.ConnectionId && loserOfBattlePlayerNumber == LocalGamePlayerScript.playerNumber)
+                    {
+                        Debug.Log("Failed to capture enemy base");
+                        WinOrLoseDefenseText.text = "Failed to capture enemy base";
+                    }
+                }
+
+            }
+            else
+            {
+                WinOrLoseDefenseText.text = "Stalement. Attacker must retreat";
+                LandScript battleSiteScript = NetworkIdentity.spawned[currentBattleSite].gameObject.GetComponent<LandScript>();
+                if (LocalGamePlayerScript.myPlayerBasePosition == battleSiteScript.gameObject.transform.position)
+                {
+                    Debug.Log("UpdateResultsPanel: Player was defending their own base. Do not expand units for retreat. Expand other player's units.");
+                    GamePlayer opposingPlayer = GameObject.FindGameObjectWithTag("GamePlayer").GetComponent<GamePlayer>();
+                    battleSiteScript.ExpandLosingUnits(opposingPlayer.playerNumber);
+                }
+                else
+                {
+                    Debug.Log("UpdateResultsPanel: Player was ATTACKING opposing base. Expand their units for retreat.");
+                    battleSiteScript.ExpandLosingUnits(LocalGamePlayerScript.playerNumber);
+                }
+            }
+            
+        }
     }
     public void HandleAreUnitsLostCalculated(bool oldValue, bool newValue)
     {
@@ -1562,6 +1637,7 @@ public class GameplayManager : NetworkBehaviour
             if (retreatingUnitsDestroyed.activeInHierarchy)
                 retreatingUnitsDestroyed.SetActive(false);
         }
+        
     }
     void ShowDeadUnits()
     {
@@ -1663,9 +1739,31 @@ public class GameplayManager : NetworkBehaviour
         }
         else if (reasonForWinning == "Draw: No Winner")
         {
-            Debug.Log("Local player needs to retreat. Reason: Battle was a draw. Both players retreat");
-            doesPlayerNeedToRetreatText.text = "Retreat Your Units";
-            MouseClickManager.instance.canSelectUnitsInThisPhase = true;
+            if (isPlayerBaseDefense)
+            {
+                Debug.Log("Base defense detected. Checking if player was defending their own base.");
+                GameObject battleSite = NetworkIdentity.spawned[currentBattleSite].gameObject;
+                if (battleSite.transform.position == LocalGamePlayerScript.myPlayerBasePosition)
+                {
+                    Debug.Log("Player defending their own base in a draw. They do not need to retreat.");
+                    MouseClickManager.instance.canSelectUnitsInThisPhase = false;
+                    doesPlayerNeedToRetreatText.text = "Attacker";
+                    doesPlayerNeedToRetreatText.text += " retreating";
+                    ChangePlayerReadyStatus();
+                }
+                else
+                {
+                    Debug.Log("Player was ATTACKING opposing base. They must retreat.");
+                    doesPlayerNeedToRetreatText.text = "Retreat Your Units";
+                    MouseClickManager.instance.canSelectUnitsInThisPhase = true;
+                }
+            }
+            else
+            {
+                Debug.Log("Local player needs to retreat. Reason: Battle was a draw. Both players retreat");
+                doesPlayerNeedToRetreatText.text = "Retreat Your Units";
+                MouseClickManager.instance.canSelectUnitsInThisPhase = true;
+            }
         }
         else
         {
@@ -2006,6 +2104,108 @@ public class GameplayManager : NetworkBehaviour
             playerHandBeingViewed.GetComponent<PlayerHand>().HidePlayerHandOnScreen("Discard");
             playerHandBeingViewed = null;
             isPlayerViewingOpponentHand = false;
+        }
+    }
+    public void LocalPlayerVictory()
+    {
+        Debug.Log("Executing LocalPlayerVictory");
+        GameOverUI(false);
+        GameWinnerTextObjects.SetActive(true);
+    }
+    public void LocalPlayerEliminatedByUnitsLost()
+    {
+        Debug.Log("Executing LocalPlayerEliminatedByUnitsLost");
+        GameOverUI(true);
+        GameLoserTextObjects.SetActive(true);
+        ReasonForLossText.text = "all your units were killed";
+    }
+    public void LocalPlayerEliminatedByBaseCaptured()
+    {
+        Debug.Log("Executing LocalPlayerEliminatedByBaseCaptured");
+        GameOverUI(true);
+        GameLoserTextObjects.SetActive(true);
+        ReasonForLossText.text = "Your base was captured";
+    }
+    void GameOverUI(bool isLoser)
+    {
+        //Deactivate all UI panels
+        if (UnitPlacementUI.activeInHierarchy)
+            UnitPlacementUI.SetActive(false);
+        if (UnitMovementUI.activeInHierarchy)
+            UnitMovementUI.SetActive(false);
+        if (BattlesDetectedPanel.activeInHierarchy)
+            BattlesDetectedPanel.SetActive(false);
+        if (ChooseCardsPanel.activeInHierarchy)
+            ChooseCardsPanel.SetActive(false);
+        if (BattleResultsPanel.activeInHierarchy)
+            BattleResultsPanel.SetActive(false);
+        if (RetreatUnitsPanel.activeInHierarchy)
+            RetreatUnitsPanel.SetActive(false);
+
+        GamePhaseText.text = "Game Over";
+
+        EndGamePanel.SetActive(true);
+
+        if (!isServer && isLoser)
+        {
+            //NetworkClient.Disconnect();
+            LocalGamePlayerScript.QuitGame();
+        }   
+        else if (isServer && isLoser)
+            LocalGamePlayerScript.HostLostGame();
+    }
+    public void QuitGame()
+    {
+        try
+        {
+            LocalGamePlayerScript.QuitGame();
+        }
+        catch
+        {
+            Debug.Log("LocalGamePlayerScript no longer exists.");
+        }
+        //LocalGamePlayerScript.QuitGame();
+        SceneManager.LoadScene("TitleScreen");        
+    }
+    public void HandleIsPlayerBaseDefense(bool oldValue, bool newValue)
+    {
+        if (isServer)
+        {
+            isPlayerBaseDefense = newValue;
+        }
+        if (newValue)
+        {
+            Debug.Log("HandleIsPlayerBaseDefense: isPlayerBaseDefense set to true.");
+        }
+        else
+        {
+            Debug.Log("HandleIsPlayerBaseDefense: isPlayerBaseDefense set to false.");
+        }
+        if (isClient)
+            ActivatePlayerBaseBattlePanel();
+    }
+    void ActivatePlayerBaseBattlePanel()
+    {
+        if (isPlayerBaseDefense)
+        {
+            PlayerBaseDefenseObjects.SetActive(true);
+            Debug.Log("ActivatePlayerBaseBattlePanel: Player base battle. Activating the PlayerBaseBattlePanel");
+            GameObject battleSite = NetworkIdentity.spawned[currentBattleSite].gameObject;
+            if (battleSite.transform.position == LocalGamePlayerScript.myPlayerBasePosition)
+            {
+                Debug.Log("Player is DEFENDING their own base");
+                DefeatEnemyText.text = "Defeat the enemy or lose the game!";
+            }
+            else
+            {
+                Debug.Log("Player is ATTACKING enemy base");
+                DefeatEnemyText.text = "defeat the enemy and win the game!";
+            }
+        }
+        else
+        {
+            Debug.Log("ActivatePlayerBaseBattlePanel: No player base battle. Deactivating the PlayerBaseBattlePanel");
+            PlayerBaseDefenseObjects.SetActive(false);
         }
     }
 

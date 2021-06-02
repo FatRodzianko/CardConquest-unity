@@ -57,6 +57,12 @@ public class GamePlayer : NetworkBehaviour
     [SyncVar] public bool doesPlayerNeedToRetreat = false;
     [SyncVar] public bool canPlayerRetreat = false;
 
+    [Header("End of Game Statuses")]
+    [SyncVar(hook = nameof(HandlePlayerWin))] bool didPlayerWin = false;
+    [SyncVar(hook = nameof(HandlePlayerEliminatedFromUnitsLost))] bool wasPlayerEliminatedFromUnitsLost = false;
+    [SyncVar(hook = nameof(HandlePlayerEliminatedFromBaseCaptured))] bool wasPlayerEliminatedFromBaseCaptured = false;
+    
+
     private NetworkManagerCC game;
     private NetworkManagerCC Game
     {
@@ -573,7 +579,27 @@ public class GamePlayer : NetworkBehaviour
                 AfterBattleCleanUp();
                 
                 MovePlayedCardToDiscard();
+
+                // Check if the previous battle was a base defense. If so, check if the defending player lost the base defense
+                if (GameplayManager.instance.isPlayerBaseDefense)
+                {
+                    Debug.Log("Server: Previous battle was a player base defense. Checking if the defending player lost");
+                    CheckForWinnerFromPlayerBaseBattle();
+                }
+
                 DestroyUnitsLostInBattle();
+
+                //Check if a player won the game after the battle. end the game if so
+                foreach (GamePlayer player in Game.GamePlayers)
+                {
+                    if (player.didPlayerWin)
+                    {
+                        Game.CurrentGamePhase = "Game Over";
+                        Debug.Log("Changing phase to Game Over");
+                        RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
+                        return;
+                    }
+                }
                 bool unitsLeftToRetreat = CheckIfUnitsAreLeftToRetreat();
                 if (unitsLeftToRetreat)
                 {
@@ -721,11 +747,42 @@ public class GamePlayer : NetworkBehaviour
         GameObject landTileHolder = GameObject.FindGameObjectWithTag("LandHolder");
         bool wasBattleDetected = false;
         GameplayManager.instance.battleSiteNetIds.Clear();
+
+        //Get a list of the Vector3 coordinates for all player bases
+        Dictionary<Vector3, int> playerBaseAndPlayerNumber = new Dictionary<Vector3, int>();
+        foreach (GamePlayer player in Game.GamePlayers)
+        {
+            playerBaseAndPlayerNumber.Add(player.myPlayerBasePosition, player.playerNumber);
+        }
+
         foreach (Transform landObject in landTileHolder.transform)
         {
             LandScript landScript = landObject.gameObject.GetComponent<LandScript>();
-            if (landScript.UnitNetIdsAndPlayerNumber.Count > 1)
+            if (playerBaseAndPlayerNumber.ContainsKey(landObject.transform.position))
             {
+                Debug.Log("CheckForPossibleBattles: Checking for units on a player base");
+                int basePlayerNumber = playerBaseAndPlayerNumber[landObject.transform.position];
+                if (landScript.UnitNetIdsAndPlayerNumber.Count > 0)
+                {
+                    Debug.Log("CheckForPossibleBattles: At least one unit on player base: " + landObject.transform.position.ToString());
+                    foreach (KeyValuePair<uint, int> units in landScript.UnitNetIdsAndPlayerNumber)
+                    {
+                        if (basePlayerNumber != units.Value)
+                        {
+                            Debug.Log("CheckForPossibleBattles opposing player discovered on player base at: " + landObject.transform.position.ToString()); ;
+                            wasBattleDetected = true;
+                            int battleNumber = GameplayManager.instance.battleSiteNetIds.Count + 1;
+                            GameplayManager.instance.battleSiteNetIds.Add(battleNumber, landObject.GetComponent<NetworkIdentity>().netId);
+                            break;
+                        }
+                    }
+                }
+                else
+                    Debug.Log("CheckForPossibleBattles: NO UNITS on player base: " + landObject.transform.position.ToString());
+            }
+            else if (landScript.UnitNetIdsAndPlayerNumber.Count > 1)
+            {
+                
                 int playerNumber = -1;
                 foreach (KeyValuePair<uint, int> units in landScript.UnitNetIdsAndPlayerNumber)
                 {
@@ -787,6 +844,15 @@ public class GamePlayer : NetworkBehaviour
         }
         requestingPlayer.playerBattleScore = requestingPlayer.playerArmyNumberOfInf;
         requestingPlayer.playerBattleScore += (requestingPlayer.playerArmyNumberOfTanks * 2);
+
+        // Check to see if player is defending their own base. If they are, add 2 to their battle score
+        if (battleSite.transform.position == requestingPlayer.myPlayerBasePosition)
+        {
+            Debug.Log(requestingPlayer.PlayerName + " is defending their base. +2 to battle score");
+            requestingPlayer.playerBattleScore += 2;
+            GameplayManager.instance.HandleIsPlayerBaseDefense(GameplayManager.instance.isPlayerBaseDefense, true);
+        }
+
         HandleBattleScoreSet(requestingPlayer.isPlayerBattleScoreSet, true);
         //RpcUpdatePlayerBattlePanels();
     }
@@ -1062,12 +1128,21 @@ public class GamePlayer : NetworkBehaviour
 
             if (battlePlayerNumbers.Count > 0)
             {
+                //Check to see if the battle was a player base defense. you do not need to retreat if you are defending your base
                 foreach (GamePlayer gamePlayer in Game.GamePlayers)
                 {
                     if (battlePlayerNumbers.Contains(gamePlayer.playerNumber))
                     {
-                        gamePlayer.doesPlayerNeedToRetreat = true;
-                        playersToRetreat.Add(gamePlayer);
+                        if (gamePlayer.myPlayerBasePosition == battleSiteLandScript.gameObject.transform.position)
+                        {
+                            Debug.Log("CheckWhichPlayersNeedToRetreat: Player: " + gamePlayer.PlayerName + " was defending their base. They do not need to retreat on a draw.");
+                            gamePlayer.doesPlayerNeedToRetreat = false;
+                        }
+                        else
+                        {
+                            gamePlayer.doesPlayerNeedToRetreat = true;
+                            playersToRetreat.Add(gamePlayer);
+                        }                        
                     }
                     else
                         gamePlayer.doesPlayerNeedToRetreat = false;
@@ -1316,6 +1391,7 @@ public class GamePlayer : NetworkBehaviour
         if (GameplayManager.instance.unitNetIdsLost.Count > 0)
         {
             Debug.Log("unitNetIdsLost is greater than 0, must destroy this many units: " + GameplayManager.instance.unitNetIdsLost.Count.ToString());
+            bool didPlayerLoseAllUnits = false;
             foreach (uint unitNetId in GameplayManager.instance.unitNetIdsLost)
             {
                 UnitScript unitNetIdScript = NetworkIdentity.spawned[unitNetId].gameObject.GetComponent<UnitScript>();
@@ -1337,6 +1413,11 @@ public class GamePlayer : NetworkBehaviour
                         if (battleSiteScript.UnitNetIdsAndPlayerNumber.ContainsKey(unitNetId))
                             battleSiteScript.UnitNetIdsAndPlayerNumber.Remove(unitNetId);
 
+                        if (gamePlayer.playerUnitNetIds.Count == 0)
+                        {
+                            Debug.Log("No more units remaining for: " + gamePlayer.PlayerName);
+                            didPlayerLoseAllUnits = true;
+                        }
                         //RpcRemoveUnitFromLandLists(GameplayManager.instance.currentBattleSite, unitNetIdScript.gameObject);
                         break;
                     } 
@@ -1346,6 +1427,11 @@ public class GamePlayer : NetworkBehaviour
                     NetworkServer.Destroy(unitToDestroy);
                 Debug.Log("Server destroyed unit with network id: " + unitNetId.ToString());
                 unitToDestroy = null;
+            }
+            if (didPlayerLoseAllUnits)
+            {
+                Debug.Log("At least one player has no more remaining units after the battle.");
+                CheckForWinnerFromLostUnits();
             }
         }
     }
@@ -1436,6 +1522,7 @@ public class GamePlayer : NetworkBehaviour
         //RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(GameplayManager.instance.currentBattleSite);
         GameplayManager.instance.RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(GameplayManager.instance.currentBattleSite);
         GameplayManager.instance.HandleCurrentBattleSiteUpdate(GameplayManager.instance.currentBattleSite, 0);
+        GameplayManager.instance.HandleIsPlayerBaseDefense(GameplayManager.instance.isPlayerBaseDefense, false);
     }
     /*
     [ClientRpc]
@@ -1580,6 +1667,136 @@ public class GamePlayer : NetworkBehaviour
             }
         }
         return areThereNewBattlesAfterRetreat;
+    }
+    [Server]
+    void CheckForWinnerFromLostUnits()
+    {
+        Debug.Log("Executing CheckForWinnerFromLostUnits on the server.");
+        List<GamePlayer> playersWithNoUnits = new List<GamePlayer>();
+        List<GamePlayer> playersWithUnits = new List<GamePlayer>();
+
+        foreach (GamePlayer gamePlayer in Game.GamePlayers)
+        {
+            if (gamePlayer.playerUnitNetIds.Count == 0)
+                playersWithNoUnits.Add(gamePlayer);
+            else
+                playersWithUnits.Add(gamePlayer);
+        }
+
+        if (playersWithUnits.Count == 1)
+        {
+            Debug.Log("Only one player still has units. That player wins the game. Player is: " + playersWithUnits[0].PlayerName);
+            playersWithUnits[0].HandlePlayerWin(playersWithUnits[0].didPlayerWin, true);
+        }
+        else
+        {
+            Debug.Log("More than 1 player with units remain. Game still continues...");
+        }
+        foreach (GamePlayer loser in playersWithNoUnits)
+        {
+            loser.HandlePlayerEliminatedFromUnitsLost(loser.wasPlayerEliminatedFromUnitsLost, true);
+        }
+    }
+    [Server]
+    void CheckForWinnerFromPlayerBaseBattle()
+    {
+        Debug.Log("Executing CheckForWinnerFromPlayerBaseBattle on the server");
+        bool didPlayerLoseBaseDefense = false;
+
+        GameObject battleSite = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject;
+        GamePlayer defendingPlayer = null;
+        foreach (GamePlayer player in Game.GamePlayers)
+        {
+            if (player.myPlayerBasePosition == battleSite.transform.position)
+            {
+                Debug.Log("CheckForWinnerFromPlayerBaseBattle: found defending player: " + player.PlayerName);
+                defendingPlayer = player;
+                break;
+            }
+        }
+        //Check if the defending player lost the base defense. If they did, set wasPlayerEliminatedFromBaseCaptured to true;
+        if (defendingPlayer)
+        {
+            if (defendingPlayer.PlayerName == GameplayManager.instance.loserOfBattleName && defendingPlayer.ConnectionId == GameplayManager.instance.loserOfBattlePlayerConnId && defendingPlayer.playerNumber == GameplayManager.instance.loserOfBattlePlayerNumber)
+            {
+                Debug.Log("Player lost their base defense: " + defendingPlayer.PlayerName);
+                defendingPlayer.HandlePlayerEliminatedFromBaseCaptured(defendingPlayer.wasPlayerEliminatedFromBaseCaptured, true);
+                didPlayerLoseBaseDefense = true;
+            }
+            Debug.Log("Defending player: " + defendingPlayer.PlayerName + " successfully defending their base.");
+        }
+        // Check to see if more than 1 player remaining in game. If only 1 remains, declare that player the winner of the game
+        if (didPlayerLoseBaseDefense)
+        {
+            List<GamePlayer> remainingPlayers = new List<GamePlayer>();
+            foreach (GamePlayer player in Game.GamePlayers)
+            {
+                if (!player.wasPlayerEliminatedFromBaseCaptured && !player.wasPlayerEliminatedFromUnitsLost)
+                {
+                    Debug.Log("CheckForWinnerFromPlayerBaseBattle: Player who was no eliminated by player base capture or lost units: " + player.PlayerName);
+                    remainingPlayers.Add(player);
+                }
+            }
+            if (remainingPlayers.Count == 1)
+            {
+                Debug.Log("Only 1 player remaining. Naming the following player the winner of the game: " + remainingPlayers[0].PlayerName);
+                remainingPlayers[0].HandlePlayerWin(remainingPlayers[0].didPlayerWin, true);
+            }
+        }
+    }
+    void HandlePlayerWin(bool oldValue, bool newValue)
+    {
+        if (isServer)
+            didPlayerWin = newValue;
+        if (newValue && hasAuthority)
+        {
+            GameplayManager.instance.LocalPlayerVictory();
+        }
+    }
+    void HandlePlayerEliminatedFromUnitsLost(bool oldValue, bool newValue)
+    {
+        if (isServer)
+            wasPlayerEliminatedFromUnitsLost = newValue;
+        if (newValue && hasAuthority)
+        {
+            GameplayManager.instance.LocalPlayerEliminatedByUnitsLost();
+        }
+    }
+    void HandlePlayerEliminatedFromBaseCaptured(bool oldValue, bool newValue)
+    {
+        if (isServer)
+        {
+            wasPlayerEliminatedFromBaseCaptured = newValue;
+        }
+        if (newValue && hasAuthority)
+        {
+            GameplayManager.instance.LocalPlayerEliminatedByBaseCaptured();
+        }
+    }
+    public void HostLostGame()
+    { 
+        if(Game.GamePlayers.Contains(this))
+            Game.GamePlayers.Remove(this);
+    }
+    public void HostShutDownServer()
+    {
+        Game.HostShutDownServer();
+    }
+    public void QuitGame()
+    {
+        if (hasAuthority)
+        {
+            if (isServer)
+            {
+                Game.StopHost();
+                Game.HostShutDownServer();
+            }
+            else
+            {
+                Game.StopClient();
+                Game.HostShutDownServer();
+            }
+        }
     }
 }
 
