@@ -1373,6 +1373,16 @@ public class GamePlayer : NetworkBehaviour
             {
                 if (battlePlayerNumbers.Contains(gamePlayer.playerNumber))
                     battlePlayers.Add(gamePlayer);
+                else if (GameplayManager.instance.isPlayerBaseDefense)
+                {
+                    if (gamePlayer.myPlayerBasePosition == battleSiteLandScript.gameObject.transform.position)
+                    {
+                        Debug.Log("MovePlayedCardToDiscard: Battle was a base defense and the defending player was found");
+                        if (!battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                            battlePlayers.Add(gamePlayer);
+
+                    }
+                }
             }
         }
 
