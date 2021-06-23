@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Mirror;
+using System.Linq;
 
 public class LandScript : NetworkBehaviour
 {
@@ -62,7 +63,7 @@ public class LandScript : NetworkBehaviour
     }
     public void MultipleUnitsUIText(string unitType)
     {
-        Debug.Log("Executing MultipleUnitsUIText for unit type: " + unitType);
+        Debug.Log("Executing MultipleUnitsUIText for unit type: " + unitType + " for land object: " + this.gameObject);
         if (unitType == "infantry")
         {
             if (infText == null)
@@ -93,7 +94,7 @@ public class LandScript : NetworkBehaviour
                 tankText.transform.GetChild(0).GetComponent<TextMeshPro>().SetText("x" + tanksOnLand.Count.ToString());
             }
         }
-        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card"))
+        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card") || GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
         {
             if (infText != null)
             {
@@ -120,7 +121,7 @@ public class LandScript : NetworkBehaviour
     }
     public void UpdateUnitText()
     {
-        Debug.Log("Executing UpdateUnitText");
+        Debug.Log("Executing UpdateUnitText for land object: " + this.gameObject);
         if (infText != null)
         {
             Debug.Log("Updating inf text. Current number of infantry " + infantryOnLand.Count.ToString() + " on: " + this.gameObject.transform.position);
@@ -131,13 +132,20 @@ public class LandScript : NetworkBehaviour
                 Debug.Log("1 or less infantry. Deactivating infText object from: " + this.gameObject.transform.position);
                 Destroy(infText);
                 infText = null;
-                CollapseUnits();
+                if (infantryOnLand.Any(x => x.GetComponent<UnitScript>().canUnitReinforce == true))
+                {
+                    Debug.Log("CollapseUnits: At least 1 unit has canUnitReinforce set to true. Expanding for reinforcements for land object: " + this.gameObject);
+                    ExpandForReinforcements(true);
+                    HideUnitText();
+                }
+                else
+                    CollapseUnits();
             }
 
         }
         if (tankText != null)
         {
-            Debug.Log("Updating tank text. Current number of tanks: " + tanksOnLand.Count.ToString() + " on: " + this.gameObject.transform.position);
+            Debug.Log("Updating tank text. Current number of tanks: " + tanksOnLand.Count.ToString() + " on: " + this.gameObject.transform.position + " for land object: " + this.gameObject);
             if (tanksOnLand.Count > 1)
                 tankText.transform.GetChild(0).GetComponent<TextMeshPro>().SetText("x" + tanksOnLand.Count.ToString());
             else
@@ -145,10 +153,17 @@ public class LandScript : NetworkBehaviour
                 Debug.Log("1 or less tank. Deactivating tankText object from: " + this.gameObject.transform.position);
                 Destroy(tankText);
                 tankText = null;
-                CollapseUnits();
+                if (tanksOnLand.Any(x => x.GetComponent<UnitScript>().canUnitReinforce == true))
+                {
+                    Debug.Log("CollapseUnits: At least 1 unit has canUnitReinforce set to true. Expanding for reinforcements for land object: " + this.gameObject);
+                    ExpandForReinforcements(true);
+                    HideUnitText();
+                }
+                else
+                    CollapseUnits();
             }                
         }
-        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card"))
+        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card") || GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
         {
             if (infText != null)
             {
@@ -226,7 +241,7 @@ public class LandScript : NetworkBehaviour
     void ExpandUnits()
     {
         Vector3 temp;
-        if (infantryOnLand.Count > 1)
+        /*if (infantryOnLand.Count > 1)
         {
             for (int i = 1; i < infantryOnLand.Count; i++)
             {
@@ -279,6 +294,67 @@ public class LandScript : NetworkBehaviour
                     tanksOnLand[i].transform.position = temp;
                 }
             }
+        }*/
+        if (infantryOnLand.Count > 1)
+        {
+            for (int i = 1; i < infantryOnLand.Count; i++)
+            {
+                if (i == 1)
+                {
+                    temp = transform.position;
+                    temp.x += 0.65f;
+                    temp.y -= 0.5f;
+                    infantryOnLand[i].transform.position = temp;
+                }
+                else if (i == 2)
+                {
+                    temp = transform.position;
+                    temp.x -= 0.6f;
+                    temp.y -= 0.5f;
+                    infantryOnLand[i].transform.position = temp;
+                }
+                else if (i == 3)
+                {
+                    temp = transform.position;
+                    temp.y -= 0.5f;
+                    temp.y -= 0.8f;
+                    infantryOnLand[i].transform.position = temp;
+                }
+                else if (i == 4)
+                {
+                    temp = transform.position;
+                    temp.y -= 0.5f;
+                    temp.y += 0.8f;
+                    infantryOnLand[i].transform.position = temp;
+                }
+            }
+        }
+        if (tanksOnLand.Count > 1)
+        {
+            for (int i = 1; i < tanksOnLand.Count; i++)
+            {
+                if (i == 1)
+                {
+                    temp = transform.position;
+                    temp.x += 0.95f;
+                    temp.y += 0.5f;
+                    tanksOnLand[i].transform.position = temp;
+                }
+                else if (i == 2)
+                {
+                    temp = transform.position;
+                    temp.x -= 0.95f;
+                    temp.y += 0.5f;
+                    tanksOnLand[i].transform.position = temp;
+                }
+                else if (i == 3)
+                {
+                    temp = transform.position;
+                    temp.y += 0.5f;
+                    temp.y += 0.6f;
+                    tanksOnLand[i].transform.position = temp;
+                }
+            }
         }
         HideUnitText();
     }
@@ -314,8 +390,25 @@ public class LandScript : NetworkBehaviour
         }
         //CheckIfMultipleUnitsOnLand();
     }
-    void CollapseUnits()
+    public void CollapseUnits()
     {
+        Debug.Log("Executing CollapseUnits for land object: " + this.gameObject);
+        /*if (GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
+        {
+            Debug.Log("CollapseUnits: For reinforcements phase for land object: " + this.gameObject);
+            if (infantryOnLand.Any(x => x.GetComponent<UnitScript>().canUnitReinforce == true) || tanksOnLand.Any(x => x.GetComponent<UnitScript>().canUnitReinforce == true))
+            {
+                Debug.Log("CollapseUnits: At least 1 unit has canUnitReinforce set to true. Expanding for reinforcements for land object: " + this.gameObject);
+                ExpandForReinforcements(true);
+                HideUnitText();
+            }
+            
+        }
+        else
+        {
+            Debug.Log("CollapseUnits: NOT FOR reinforcements phase for land object: " + this.gameObject);
+            
+        }*/
         Vector3 temp;
         // move units back?
         if (infantryOnLand.Count > 0)
@@ -337,7 +430,6 @@ public class LandScript : NetworkBehaviour
                 tank.transform.position = temp;
             }
         }
-        
         UnHideUnitText();
     }
     void CheckIfMultipleUnitsOnLand()
@@ -835,7 +927,7 @@ public class LandScript : NetworkBehaviour
     }
     public void RearrangeUnitsAfterTheyAreKilledFromBattle(int playerNumber)
     {
-        Debug.Log("Executing RearrangeUnitsAfterTheyAreKilledFromBattle");
+        Debug.Log("Executing RearrangeUnitsAfterTheyAreKilledFromBattle for land object: " + this.gameObject);
         if (playerNumber == 1)
         {
             if (Player1Inf.Count > 0)
@@ -987,5 +1079,121 @@ public class LandScript : NetworkBehaviour
                     tankText.SetActive(false);
             }
         }      
+    }
+    public void ExpandForReinforcements(bool isThisForReinforcements)
+    {
+        Debug.Log("Executing ExpandForReinforcements on land object: " + this.gameObject + " with isThisForReinforcements set to " + isThisForReinforcements.ToString());
+        List<GameObject> infCanRetreat = new List<GameObject>();
+        List<GameObject> tankCanRetreat = new List<GameObject>();
+
+        if (infantryOnLand.Count > 0)
+        {
+            foreach (GameObject infantry in infantryOnLand)
+            {
+                if (isThisForReinforcements)
+                {
+                    if (infantry.GetComponent<UnitScript>().canUnitReinforce)
+                        infCanRetreat.Add(infantry);
+                }
+                else
+                {
+                    if (infantry.GetComponent<UnitScript>().canUnitReinforce && infantry.GetComponent<UnitScript>().isUnitReinforcingBattle)
+                        infCanRetreat.Add(infantry);
+                }
+
+            }
+        }
+        if (tanksOnLand.Count > 0)
+        {
+            foreach (GameObject tank in tanksOnLand)
+            {
+                if (isThisForReinforcements)
+                {
+                    if (tank.GetComponent<UnitScript>().canUnitReinforce)
+                        tankCanRetreat.Add(tank);
+                }
+                else
+                {
+                    if (tank.GetComponent<UnitScript>().canUnitReinforce && tank.GetComponent<UnitScript>().isUnitReinforcingBattle)
+                        tankCanRetreat.Add(tank);
+                }
+                
+            }
+        }
+        Vector3 temp;
+        if (infCanRetreat.Count > 1)
+        {
+            for (int i = 0; i < infCanRetreat.Count; i++)
+            {
+                if (i == 0)
+                {
+                    temp = transform.position;
+                    temp.y -= 0.5f;
+                    infCanRetreat[i].transform.position = temp;
+                }
+                if (i == 1)
+                {
+                    temp = transform.position;
+                    temp.x += 0.65f;
+                    temp.y -= 0.5f;
+                    infCanRetreat[i].transform.position = temp;
+                }
+                else if (i == 2)
+                {
+                    temp = transform.position;
+                    temp.x -= 0.6f;
+                    temp.y -= 0.5f;
+                    infCanRetreat[i].transform.position = temp;
+                }
+                else if (i == 3)
+                {
+                    temp = transform.position;
+                    temp.y -= 0.5f;
+                    temp.y -= 0.8f;
+                    infCanRetreat[i].transform.position = temp;
+                }
+                else if (i == 4)
+                {
+                    temp = transform.position;
+                    temp.y -= 0.5f;
+                    temp.y += 0.8f;
+                    infCanRetreat[i].transform.position = temp;
+                }
+            }
+        }
+        if (tankCanRetreat.Count > 1)
+        {
+            for (int i = 0; i < tankCanRetreat.Count; i++)
+            {
+                if (i == 0)
+                {
+                    temp = transform.position;
+                    temp.y += 0.5f;
+                    tankCanRetreat[i].transform.position = temp;
+                }
+                if (i == 1)
+                {
+                    temp = transform.position;
+                    temp.x += 0.95f;
+                    temp.y += 0.5f;
+                    tankCanRetreat[i].transform.position = temp;
+                }
+                else if (i == 2)
+                {
+                    temp = transform.position;
+                    temp.x -= 0.95f;
+                    temp.y += 0.5f;
+                    tankCanRetreat[i].transform.position = temp;
+                }
+                else if (i == 3)
+                {
+                    temp = transform.position;
+                    temp.y += 0.5f;
+                    temp.y += 0.6f;
+                    tankCanRetreat[i].transform.position = temp;
+                }
+            }
+        }
+        HideUnitText();
     }
 }

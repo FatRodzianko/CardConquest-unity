@@ -81,7 +81,7 @@ public class PlayerHand : NetworkBehaviour
         else if (HandOrDiscard == "Discard")
             handOrDiscard = DiscardPile;
 
-        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card"))
+        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card") || GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
         {
             Vector3 cardLocation = Camera.main.transform.position;
             cardLocation.x -= 7f;
@@ -97,13 +97,16 @@ public class PlayerHand : NetworkBehaviour
                 playerCard.transform.localScale = cardScale;
                 cardLocation.x += 3.5f;
             }
-            if (GameplayManager.instance.localPlayerBattlePanel && GameplayManager.instance.opponentPlayerBattlePanel)
+            if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card"))
             {
-                GameplayManager.instance.localPlayerBattlePanel.SetActive(false);
-                GameplayManager.instance.opponentPlayerBattlePanel.SetActive(false);
-            }
-            if (GameplayManager.instance.isPlayerBaseDefense)
-                GameplayManager.instance.PlayerBaseDefenseObjects.SetActive(false);
+                if (GameplayManager.instance.localPlayerBattlePanel && GameplayManager.instance.opponentPlayerBattlePanel)
+                {
+                    GameplayManager.instance.localPlayerBattlePanel.SetActive(false);
+                    GameplayManager.instance.opponentPlayerBattlePanel.SetActive(false);
+                }
+                if (GameplayManager.instance.isPlayerBaseDefense)
+                    GameplayManager.instance.PlayerBaseDefenseObjects.SetActive(false);
+            }            
         }
         else
         {
@@ -130,6 +133,7 @@ public class PlayerHand : NetworkBehaviour
     }
     public void HidePlayerHandOnScreen(string HandOrDiscard)
     {
+        Debug.Log("Executing HidePlayerHandOnScreen with a HandOrDiscard value of: " + HandOrDiscard);
         isPlayerViewingTheirHand = false;
 
         List<GameObject> handOrDiscard = new List<GameObject>();
@@ -145,30 +149,39 @@ public class PlayerHand : NetworkBehaviour
                 playerCard.SetActive(false);
             }
         }
-        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card") || GameplayManager.instance.currentGamePhase == "Battle Results")
+        if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card") || GameplayManager.instance.currentGamePhase == "Battle Results" || GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
         {
             GameObject landHolder = GameObject.FindGameObjectWithTag("LandHolder");
+            //Get the battle site net id based on if it is for reinforcements or choose cards/battle results
+            uint battleSiteNetId = 0;
+            if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card") || GameplayManager.instance.currentGamePhase == "Battle Results")
+                battleSiteNetId = GameplayManager.instance.currentBattleSite;
+            else if (GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
+                battleSiteNetId = GameplayManager.instance.reinforcementsBattleSite;
+
             foreach (Transform landChild in landHolder.transform)
             {
-                if (landChild.gameObject.GetComponent<NetworkIdentity>().netId == GameplayManager.instance.currentBattleSite)
+                if (landChild.gameObject.GetComponent<NetworkIdentity>().netId == battleSiteNetId)
                 {
                     LandScript landScript = landChild.GetComponent<LandScript>();
                     landScript.UnHideUnitText();
                 }                
             }
-            if (GameplayManager.instance.localPlayerBattlePanel && GameplayManager.instance.opponentPlayerBattlePanel)
+            if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card") || GameplayManager.instance.currentGamePhase == "Battle Results")
             {
-                GameplayManager.instance.localPlayerBattlePanel.SetActive(true);
-                GameplayManager.instance.opponentPlayerBattlePanel.SetActive(true);
-            }
-            if (GameplayManager.instance.showingNearbyUnits)
-                GameplayManager.instance.ShowUnitsOnMap();
-            if (GameplayManager.instance.isPlayerBaseDefense)
-            {
-                GameplayManager.instance.PlayerBaseDefenseObjects.SetActive(true);
-                GameplayManager.instance.BattleResultsBaseDefenseObjects.SetActive(true);
-            }
-                
+                if (GameplayManager.instance.localPlayerBattlePanel && GameplayManager.instance.opponentPlayerBattlePanel)
+                {
+                    GameplayManager.instance.localPlayerBattlePanel.SetActive(true);
+                    GameplayManager.instance.opponentPlayerBattlePanel.SetActive(true);
+                }
+                if (GameplayManager.instance.showingNearbyUnits)
+                    GameplayManager.instance.ShowUnitsOnMap(false);
+                if (GameplayManager.instance.isPlayerBaseDefense)
+                {
+                    GameplayManager.instance.PlayerBaseDefenseObjects.SetActive(true);
+                    GameplayManager.instance.BattleResultsBaseDefenseObjects.SetActive(true);
+                }
+            }   
         }
         else
         {

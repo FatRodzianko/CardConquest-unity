@@ -76,7 +76,7 @@ public class MouseClickManager : MonoBehaviour
             if (rayHitUnit.collider != null)
             {
 
-                if (rayHitUnit.collider.gameObject.GetComponent<NetworkIdentity>().hasAuthority && !playerViewingHand && !playerViewingOpponentHand && !playerReadyForNextPhase && canSelectUnitsInThisPhase && GameplayManager.instance.currentGamePhase != "Retreat Units")
+                if (rayHitUnit.collider.gameObject.GetComponent<NetworkIdentity>().hasAuthority && !playerViewingHand && !playerViewingOpponentHand && !playerReadyForNextPhase && canSelectUnitsInThisPhase && GameplayManager.instance.currentGamePhase != "Retreat Units" && !GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
                 {
                     Debug.Log("Player has authority over unit");
                     UnitScript unitScript = rayHitUnit.collider.GetComponent<UnitScript>();
@@ -137,18 +137,41 @@ public class MouseClickManager : MonoBehaviour
                             unitScript.ClickedOn();
                             unitScript.CheckLandForRemainingSelectedUnits();
                         }
-                    }
-                    else 
+                    }                    
+                    else
                     {
                         Debug.Log("Player clicked on unit that doesn't have to retreat.");
                     }                    
+                }
+                else if (rayHitUnit.collider.gameObject.GetComponent<NetworkIdentity>().hasAuthority && !playerViewingHand && !playerViewingOpponentHand && !playerReadyForNextPhase && canSelectUnitsInThisPhase && GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
+                {
+                    // unit selection for Reinforcements
+                    Debug.Log("Clicked on unit during reinforcements phase");
+                    UnitScript unitScript = rayHitUnit.collider.GetComponent<UnitScript>();
+                    if (!unitScript.currentlySelected && unitScript.canUnitReinforce)
+                    {
+                        Debug.Log("Selecting a new unit.");
+                        unitsSelected.Add(rayHitUnit.collider.gameObject);
+                        unitScript.currentlySelected = !unitScript.currentlySelected;
+                        unitScript.ClickedOn();
+                        GameplayManager.instance.ToggleSelectReinforcementsButton();
+
+                    }
+                    else if (unitScript.currentlySelected && unitScript.canUnitReinforce)
+                    {
+                        unitsSelected.Remove(rayHitUnit.collider.gameObject);
+                        Debug.Log("Deselecting the unit unit.");
+                        unitScript.currentlySelected = !unitScript.currentlySelected;
+                        unitScript.ClickedOn();
+                        GameplayManager.instance.ToggleSelectReinforcementsButton();
+                    }
                 }
                 else
                 {
                     Debug.Log("Player DOES NOT have authority over unit");
                 }
             }
-            else if (rayHitLand.collider != null && unitsSelected.Count > 0 && rayHitUnit.collider == null) // if the player has selected units previously and clicks on a land, check if the units can be moved)
+            else if (rayHitLand.collider != null && unitsSelected.Count > 0 && rayHitUnit.collider == null && !GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements")) // if the player has selected units previously and clicks on a land, check if the units can be moved)
             {
                 // Begin asking server if the desired move is allowed
                 if (!playerViewingHand)
@@ -187,23 +210,42 @@ public class MouseClickManager : MonoBehaviour
             {
                 Debug.Log("Can't access PlayerHand");
             }
+            bool playerReadyForNextPhase = false;
+            try
+            {
+                playerReadyForNextPhase = LocalGamePlayerScript.ReadyForNextPhase;
+            }
+            catch
+            {
+                Debug.Log("Can't access LocalGamePlayer");
+            }
             Debug.Log("Right clicked.");
-            if (!playerViewingHand)
+            if (!playerViewingHand && !playerReadyForNextPhase)
                 ClearUnitSelection();
         }
     }
     public void ClearUnitSelection()
     {
+        Debug.Log("Executing: ClearUnitSelection");
         if (unitsSelected.Count > 0)
         {
+            Debug.Log("ClearUnitSelection: Begin unselecting units");
             foreach (GameObject unit in unitsSelected)
             {
+                Debug.Log("ClearUnitSelection: Will unselect: " + unit);
                 UnitScript unitScript = unit.GetComponent<UnitScript>();
                 unitScript.currentlySelected = !unitScript.currentlySelected;
                 unitScript.ClickedOn();
                 unitScript.CheckLandForRemainingSelectedUnits();
             }
+            Debug.Log("ClearUnitSelection: Done unselecting units");
             unitsSelected.Clear();
+            if (GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
+                GameplayManager.instance.ToggleSelectReinforcementsButton();
+        }
+        else
+        {
+            Debug.Log("ClearUnitSelection: No units to clear");
         }
     }
     public void MoveAllUnits(GameObject landClicked)

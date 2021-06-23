@@ -39,6 +39,14 @@ public class GamePlayer : NetworkBehaviour
     [SyncVar] public bool HaveSpawnedCards = false;
     [SyncVar(hook = nameof(HandlePlayerReadyStatusUpdate))] public bool ReadyForNextPhase = false;
 
+    [Header("Reinforcements")]
+    [SyncVar(hook = nameof(HandleCanPlayerReinforce))] public bool canPlayerReinforce = false;
+    [SyncVar] public bool didPlayerReinforce = false;
+    public SyncList<uint> unitsAvailableForReinforcement = new SyncList<uint>();
+    public SyncList<uint> playerReinforcementNetIds = new SyncList<uint>();
+    [SyncVar] public int playerReinforcementsNumberOfInf;
+    [SyncVar] public int playerReinforcementsNumberOfTanks;
+
     [Header("Player Battle Info")]
     //public SyncList<uint> battleSiteNetIds = new SyncList<uint>();
     //[SyncVar(hook = nameof(HandleBattleSitesSet))] bool BattleSitesHaveBeenSet = false;
@@ -46,6 +54,7 @@ public class GamePlayer : NetworkBehaviour
     public SyncList<uint> playerArmyNetIds = new SyncList<uint>();
     [SyncVar] public int playerArmyNumberOfInf;
     [SyncVar] public int playerArmyNumberOfTanks;
+    [SyncVar] public int playerArmyReinforcementPower;
     [SyncVar] public int playerBattleScore;
     [SyncVar(hook = nameof(HandleBattleScoreSet))] public bool isPlayerBattleScoreSet = false;
 
@@ -546,6 +555,31 @@ public class GamePlayer : NetworkBehaviour
             if (Game.CurrentGamePhase == "Battle(s) Detected")
             {
                 GameplayManager.instance.battleNumber = 1;
+
+                
+
+                //Check for possible reinforcements before starting the battle
+                bool canPlayersReinforce = CheckForPossibleReinforcements();
+                if (canPlayersReinforce)
+                {
+                    Debug.Log("CheckForPossibleReinforcements returned true");
+                    Game.CurrentGamePhase = "Reinforcements:\nBattle #" + GameplayManager.instance.battleNumber.ToString();
+                    Debug.Log("Game phase changed to Reinforcements");
+
+                    foreach (KeyValuePair<int, uint> battles in GameplayManager.instance.battleSiteNetIds)
+                    {
+                        if (battles.Key == GameplayManager.instance.battleNumber)
+                        {
+                            //GameplayManager.instance.currentBattleSite = battles.Value;
+                            GameplayManager.instance.HandleReinforcementsBattleSiteUpdate(GameplayManager.instance.reinforcementsBattleSite, battles.Value);
+                            break;
+                        }
+                    }
+
+                    RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
+                    return;
+                }
+
                 foreach (KeyValuePair<int, uint> battles in GameplayManager.instance.battleSiteNetIds)
                 {
                     if (battles.Key == GameplayManager.instance.battleNumber)
@@ -555,6 +589,7 @@ public class GamePlayer : NetworkBehaviour
                         break;
                     }
                 }
+
                 Game.CurrentGamePhase = "Choose Cards:\nBattle #1";
                 Debug.Log("Game phase changed to Choose Cards");
                 RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
@@ -683,6 +718,27 @@ public class GamePlayer : NetworkBehaviour
                 }
                 RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
                 return;
+            }
+            if (Game.CurrentGamePhase.StartsWith("Reinforcements"))
+            {
+                Debug.Log("Previous game phase was Reinforcements");
+                SetIsUnitReinforcingBattleOnUnits();
+                // Place holder to force to the first battle. Change later!!!
+                foreach (KeyValuePair<int, uint> battles in GameplayManager.instance.battleSiteNetIds)
+                {
+                    if (battles.Key == GameplayManager.instance.battleNumber)
+                    {
+                        //GameplayManager.instance.currentBattleSite = battles.Value;
+                        GameplayManager.instance.HandleCurrentBattleSiteUpdate(GameplayManager.instance.currentBattleSite, battles.Value);
+                        break;
+                    }
+                }
+
+                Game.CurrentGamePhase = "Choose Cards:\nBattle #" + GameplayManager.instance.battleNumber;
+                Debug.Log("Game phase changed to Choose Cards");
+                RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
+                return;
+                // Place holder to force to the first battle. Change later!!!
             }
             RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
         }
@@ -826,6 +882,7 @@ public class GamePlayer : NetworkBehaviour
         requestingPlayer.playerArmyNetIds.Clear();
         requestingPlayer.playerArmyNumberOfInf = 0;
         requestingPlayer.playerArmyNumberOfTanks = 0;
+        requestingPlayer.playerArmyReinforcementPower = 0;
         requestingPlayer.playerBattleScore = 0;
 
         GameObject battleSite = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject;
@@ -836,6 +893,8 @@ public class GamePlayer : NetworkBehaviour
             if (battleUnits.Value == requestingPlayer.playerNumber)
             {
                 requestingPlayer.playerArmyNetIds.Add(battleUnits.Key);
+                // Set isUnitReinforcingBattle to true for each unit in the player's army so that they can't reinforce any future battles
+                NetworkIdentity.spawned[battleUnits.Key].gameObject.GetComponent<UnitScript>().isUnitReinforcingBattle = true;
                 if (NetworkIdentity.spawned[battleUnits.Key].gameObject.tag == "infantry")
                     requestingPlayer.playerArmyNumberOfInf++;
                 else if (NetworkIdentity.spawned[battleUnits.Key].gameObject.tag == "tank")
@@ -851,6 +910,25 @@ public class GamePlayer : NetworkBehaviour
             Debug.Log(requestingPlayer.PlayerName + " is defending their base. +2 to battle score");
             requestingPlayer.playerBattleScore += 2;
             GameplayManager.instance.HandleIsPlayerBaseDefense(GameplayManager.instance.isPlayerBaseDefense, true);
+        }
+        if (requestingPlayer.didPlayerReinforce)
+        {
+            Debug.Log("CmdSetGamePlayerArmy: The requesting player: " + requestingPlayer.PlayerName + " is reinforcing their army!");
+            if (requestingPlayer.playerReinforcementNetIds.Count > 0)
+            {
+                foreach (uint reinforcement in requestingPlayer.playerReinforcementNetIds)
+                {
+                    UnitScript reinforcementScript = NetworkIdentity.spawned[reinforcement].gameObject.GetComponent<UnitScript>();
+                    if (reinforcementScript.canUnitReinforce && reinforcementScript.isUnitReinforcingBattle)
+                    {
+                        if (reinforcementScript.gameObject.tag == "infantry")
+                            requestingPlayer.playerArmyReinforcementPower++;
+                        else if (reinforcementScript.gameObject.tag == "tank")
+                            requestingPlayer.playerArmyReinforcementPower += 2;
+                    }
+                }
+            }
+            requestingPlayer.playerBattleScore += requestingPlayer.playerArmyReinforcementPower;
         }
 
         HandleBattleScoreSet(requestingPlayer.isPlayerBattleScoreSet, true);
@@ -892,14 +970,14 @@ public class GamePlayer : NetworkBehaviour
         {
             Debug.Log("Player card: " + playerCardNetworkId + " is in " + requestingPlayer.PlayerName + "'s hand.");
             //requestingPlayer.playerBattleCardNetId = playerCardNetworkId;
-            HandleUpdatedPlayerBattleCard(requestingPlayer.playerBattleCardNetId, playerCardNetworkId);
+            requestingPlayer.HandleUpdatedPlayerBattleCard(requestingPlayer.playerBattleCardNetId, playerCardNetworkId);
         }
         else 
         {
             Debug.Log("Player card: " + playerCardNetworkId + " IS NOT in " + requestingPlayer.PlayerName + "'s hand.");
         }
     }
-    void HandleUpdatedPlayerBattleCard(uint oldValue, uint newValue)
+    public void HandleUpdatedPlayerBattleCard(uint oldValue, uint newValue)
     {
         if (isServer)
         {
@@ -908,14 +986,17 @@ public class GamePlayer : NetworkBehaviour
         if (isClient && newValue != 0)
         {
             Debug.Log("Running HandleUpdatedPlayerBattleCard as a client");
+            Debug.Log("HandleUpdatedPlayerBattleCard: new value is: " + newValue.ToString());
             if (hasAuthority)
             {
+                Debug.Log("HandleUpdatedPlayerBattleCard: Client has authority to update battle card to this value: " + newValue.ToString());
                 GameplayManager.instance.HidePlayerHandPressed();
                 RemoveSelectedCardFromHandAndReposition(newValue);
-            }                
+            }
         }
         if (isClient && newValue == 0)
         {
+            Debug.Log("HandleUpdatedPlayerBattleCard: new value is 0: " + newValue.ToString());
             selectedCard = null;
         }
     }
@@ -953,6 +1034,9 @@ public class GamePlayer : NetworkBehaviour
         GameplayManager.instance.winnerOfBattleName = "";
         GameplayManager.instance.winnerOfBattlePlayerNumber = -1;
         GameplayManager.instance.winnerOfBattlePlayerConnId = -1;
+        GameplayManager.instance.loserOfBattleName = "";
+        GameplayManager.instance.loserOfBattlePlayerNumber = -1;
+        GameplayManager.instance.loserOfBattlePlayerConnId = -1;
         GameplayManager.instance.reasonForWinning = "";
         GamePlayer player1 = null;
         GamePlayer player2 = null;
@@ -964,7 +1048,9 @@ public class GamePlayer : NetworkBehaviour
             else
                 player2 = gamePlayer;
         }
+        Debug.Log("DetermineWhoWonBattle: Will get player 1 card: " + player1.playerBattleCardNetId.ToString());
         Card player1Card = NetworkIdentity.spawned[player1.playerBattleCardNetId].gameObject.GetComponent<Card>();
+        Debug.Log("DetermineWhoWonBattle: Will get player 2 card: " + player2.playerBattleCardNetId.ToString());
         Card player2Card = NetworkIdentity.spawned[player2.playerBattleCardNetId].gameObject.GetComponent<Card>();
 
         int player1BattleScore = 0;
@@ -1096,9 +1182,16 @@ public class GamePlayer : NetworkBehaviour
                 int unitsToLose = winningCard.AttackValue - losingCard.DefenseValue;
                 if (unitsToLose > losingPlayer.playerArmyNetIds.Count)
                 {
+                    if (losingPlayer.didPlayerReinforce && losingPlayer.playerReinforcementNetIds.Count > 0)
+                    {
+                        int reinforcingUnitsToLose = unitsToLose - losingPlayer.playerArmyNetIds.Count;
+                        Debug.Log("UnitsLostFromBattle: Losing player: " + losingPlayer.PlayerName + " reinforced and they should lose more units than what is in their main army. Will need to kill this many reinforcing units: " + reinforcingUnitsToLose.ToString());
+                        KillUnitsFromBattle(losingPlayer, reinforcingUnitsToLose, true);
+                        GameplayManager.instance.HandleReinforcementsLost(GameplayManager.instance.reinforcementsLost, true);
+                    }
                     unitsToLose = losingPlayer.playerArmyNetIds.Count;
                 }
-                KillUnitsFromBattle(losingPlayer, unitsToLose);
+                KillUnitsFromBattle(losingPlayer, unitsToLose, false);
             }
             else
             {
@@ -1275,31 +1368,43 @@ public class GamePlayer : NetworkBehaviour
             else if (numberAvailableToRetreat == 0)
             {
                 Debug.Log("NO space for ANY of " + retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber + " to retreat units. ALL UNITS WILL BE DESTROYED!");
-                KillUnitsFromBattle(retreatingPlayer, numberOfUnitsToRetreat);
+                KillUnitsFromBattle(retreatingPlayer, numberOfUnitsToRetreat, false);
                 GameplayManager.instance.HandleUnitsLostFromRetreat(GameplayManager.instance.unitsLostFromRetreat, true);
             }
             else
             {
                 int numberOfUnitsToDestroy = numberOfUnitsToRetreat - numberAvailableToRetreat;
                 Debug.Log("Not enough space for " + retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber + " to retreat all units. " + numberOfUnitsToDestroy.ToString() + " will need to be destroyed.");
-                KillUnitsFromBattle(retreatingPlayer, numberOfUnitsToDestroy);
+                KillUnitsFromBattle(retreatingPlayer, numberOfUnitsToDestroy, false);
                 GameplayManager.instance.HandleUnitsLostFromRetreat(GameplayManager.instance.unitsLostFromRetreat, true);
             }
             
         }
     }
     [Server]
-    void KillUnitsFromBattle(GamePlayer retreatingPlayer, int numberOfUnitsToKill)
+    void KillUnitsFromBattle(GamePlayer retreatingPlayer, int numberOfUnitsToKill, bool killReinforcingUnits)
     {
         Debug.Log("Executing KillUnitsThatCantRetreat. Will destroy " + numberOfUnitsToKill.ToString() + " for player: " + retreatingPlayer.PlayerName + ":" + retreatingPlayer.playerNumber.ToString());
+        Debug.Log("KillUnitsFromBattle: Killing reinforcements? " + killReinforcingUnits.ToString());
         // Get all the player's units from the battle site
         GameObject battleSiteLand = NetworkIdentity.spawned[GameplayManager.instance.currentBattleSite].gameObject;
         List<uint> retreatingPlayerUnits = new List<uint>();
-        foreach (KeyValuePair<uint, int> unit in battleSiteLand.GetComponent<LandScript>().UnitNetIdsAndPlayerNumber)
+        if (killReinforcingUnits)
         {
-            if (unit.Value == retreatingPlayer.playerNumber)
-                retreatingPlayerUnits.Add(unit.Key);
+            foreach (uint reinforcementNetId in retreatingPlayer.playerReinforcementNetIds)
+            {
+                if (!retreatingPlayerUnits.Contains(reinforcementNetId))
+                    retreatingPlayerUnits.Add(reinforcementNetId);
+            }
         }
+        else
+        {
+            foreach (KeyValuePair<uint, int> unit in battleSiteLand.GetComponent<LandScript>().UnitNetIdsAndPlayerNumber)
+            {
+                if (unit.Value == retreatingPlayer.playerNumber)
+                    retreatingPlayerUnits.Add(unit.Key);
+            }
+        }        
 
         //Remove uint IDs that have already been "killed" in UnitsLostFromBattle
         foreach (uint unitLost in GameplayManager.instance.unitNetIdsLost)
@@ -1476,6 +1581,7 @@ public class GamePlayer : NetworkBehaviour
         GameplayManager.instance.HandleAreBattleResultsSet(GameplayManager.instance.areBattleResultsSet, false);
         GameplayManager.instance.HandleAreUnitsLostCalculated(GameplayManager.instance.unitsLostCalculated,false);
         GameplayManager.instance.HandleUnitsLostFromRetreat(GameplayManager.instance.unitsLostFromRetreat, false);
+        GameplayManager.instance.HandleReinforcementsLost(GameplayManager.instance.reinforcementsLost, false);
         List<GamePlayer> battlePlayers = new List<GamePlayer>();
         foreach (GamePlayer player in Game.GamePlayers)
         {
@@ -1533,6 +1639,10 @@ public class GamePlayer : NetworkBehaviour
         GameplayManager.instance.RpcRemoveBattleHighlightAndBattleTextFromPreviousBattle(GameplayManager.instance.currentBattleSite);
         GameplayManager.instance.HandleCurrentBattleSiteUpdate(GameplayManager.instance.currentBattleSite, 0);
         GameplayManager.instance.HandleIsPlayerBaseDefense(GameplayManager.instance.isPlayerBaseDefense, false);
+
+        //Cleanup stuff for reinforcements
+        CleanupPlayerReinforcementInfo();
+        CleanupGameplayManagerReinforcementInfo();
     }
     /*
     [ClientRpc]
@@ -1553,7 +1663,12 @@ public class GamePlayer : NetworkBehaviour
         {
             Debug.Log("CheckForMoreBattles: More battle remain to fight.");
             moreBattles = true;
-        }   
+        }
+        if (!moreBattles)
+        {
+            Debug.Log("CheckForMoreBattles: no battles remaining. Resetting the reinforcement values for all units.");
+            ResetUnitReinforcementValues();
+        }
         return moreBattles;
     }
     [Server]
@@ -1563,9 +1678,21 @@ public class GamePlayer : NetworkBehaviour
         GameplayManager.instance.battleNumber++;
         if (GameplayManager.instance.battleSiteNetIds.ContainsKey(GameplayManager.instance.battleNumber))
         {
-            GameplayManager.instance.HandleCurrentBattleSiteUpdate(GameplayManager.instance.currentBattleSite, GameplayManager.instance.battleSiteNetIds[GameplayManager.instance.battleNumber]);
-            Game.CurrentGamePhase = "Choose Cards:\nBattle #" + GameplayManager.instance.battleNumber.ToString();
-            Debug.Log("ChangeToNextBattle: Game phase changed to " + Game.CurrentGamePhase);
+            bool areThereReinforcements = CheckForPossibleReinforcements();
+            if (areThereReinforcements)
+            {
+                Debug.Log("ChangeToNextBattle: Reinforcements available for at least 1 player. changing to reinforcements phase.");
+                GameplayManager.instance.HandleReinforcementsBattleSiteUpdate(GameplayManager.instance.reinforcementsBattleSite, GameplayManager.instance.battleSiteNetIds[GameplayManager.instance.battleNumber]);
+                Game.CurrentGamePhase = "Reinforcements:\nBattle #" + GameplayManager.instance.battleNumber.ToString();
+                Debug.Log("ChangeToNextBattle: Game phase changed to " + Game.CurrentGamePhase);
+            }
+            else
+            {
+                Debug.Log("ChangeToNextBattle: No reinforcements available. Changing to next battle/Choose Cards");
+                GameplayManager.instance.HandleCurrentBattleSiteUpdate(GameplayManager.instance.currentBattleSite, GameplayManager.instance.battleSiteNetIds[GameplayManager.instance.battleNumber]);
+                Game.CurrentGamePhase = "Choose Cards:\nBattle #" + GameplayManager.instance.battleNumber.ToString();
+                Debug.Log("ChangeToNextBattle: Game phase changed to " + Game.CurrentGamePhase);
+            }
         }
     }
     [ClientRpc]
@@ -1807,6 +1934,310 @@ public class GamePlayer : NetworkBehaviour
                 Game.HostShutDownServer();
             }
         }
+    }
+    [Server]
+    bool CheckForPossibleReinforcements()
+    {
+        Debug.Log("Executing CheckForPossibleReinforcements on the server");
+        bool canPlayersReinforce = false;
+
+        uint battleSiteNetId = GameplayManager.instance.battleSiteNetIds[GameplayManager.instance.battleNumber];
+        GameObject battleSite = NetworkIdentity.spawned[battleSiteNetId].gameObject;
+        LandScript battleSiteLandScript = battleSite.GetComponent<LandScript>();         
+
+        //Get a list of the lands within 1 tile of the battle site
+        List<LandScript> landsToReinforceFrom = new List<LandScript>();
+        Debug.Log("CheckForPossibleReinforcements: Checking for possible reinforcements for battle site with network id: " + battleSiteNetId.ToString());
+        GameObject allLand = GameObject.FindGameObjectWithTag("LandHolder");
+        foreach (Transform landObject in allLand.transform)
+        {
+            float disFromBattle = Vector3.Distance(landObject.transform.position, battleSite.transform.position);
+            if (disFromBattle < 3.01f)
+            {
+                //check if the land object is already a battle site. If so, can't reinforce from a battle site
+                bool isLandABattleSite = false;
+                foreach (KeyValuePair<int, uint> battleSites in GameplayManager.instance.battleSiteNetIds)
+                {
+                    if (battleSites.Value == landObject.gameObject.GetComponent<NetworkIdentity>().netId)
+                    {
+                        Debug.Log("CheckForPossibleReinforcements: " + landObject.gameObject + " is a battle site. Can't reinforce from here.");
+                        isLandABattleSite = true;
+                    }
+                }
+                if (landObject.transform.position == battleSite.transform.position)
+                    isLandABattleSite = true;
+                if (!isLandABattleSite)
+                {
+                    LandScript landScript = landObject.gameObject.GetComponent<LandScript>();
+                    if (landScript.UnitNetIdsAndPlayerNumber.Count > 0)
+                    {
+                        Debug.Log("CheckForPossibleReinforcements: " + landObject.gameObject + " has at least 1 unit and isn't a battle site. Adding to landsToReinforceFrom list");
+                        landsToReinforceFrom.Add(landScript);
+                    }
+                }
+            }
+        }
+
+        //If there are any lands to reinforce from, check which players can reinforce
+        if (landsToReinforceFrom.Count > 0)
+        {
+            //Get a list of all players involved in the battle
+            List<GamePlayer> battlePlayers = new List<GamePlayer>();
+            List<int> battlePlayerNumbers = new List<int>();
+            foreach (KeyValuePair<uint, int> battleUnitPlayer in battleSiteLandScript.UnitNetIdsAndPlayerNumber)
+            {
+                bool isPlayerNumberInList = battlePlayerNumbers.Contains(battleUnitPlayer.Value);
+                if (!isPlayerNumberInList)
+                    battlePlayerNumbers.Add(battleUnitPlayer.Value);
+            }
+
+            if (battlePlayerNumbers.Count > 0)
+            {
+                foreach (GamePlayer gamePlayer in Game.GamePlayers)
+                {
+                    if (battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                        battlePlayers.Add(gamePlayer);
+                    else if (battleSite.transform.position == gamePlayer.myPlayerBasePosition)
+                    {
+                        if (!battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                            battlePlayers.Add(gamePlayer);
+                    }
+                }
+            }
+
+            // clear out previous reinforcement data for battle players
+            foreach (GamePlayer gamePlayer in battlePlayers)
+            {
+                gamePlayer.unitsAvailableForReinforcement.Clear();
+                gamePlayer.playerReinforcementNetIds.Clear();
+            }
+
+            // Go through each land in landsToReinforceFrom, see which players have units that can reinforce on them
+            // If a player can reinforce, set their canPlayerReinforce value to true
+            // Check each unit to see if they can reinforce the battle. If they can reinforce, set their canUnitReinforce to true.
+            
+            foreach (LandScript landScript in landsToReinforceFrom)
+            {
+                foreach (KeyValuePair<uint, int> unit in landScript.UnitNetIdsAndPlayerNumber)
+                {
+                    if (battlePlayerNumbers.Contains(unit.Value))
+                    {
+                        Debug.Log("CheckForPossibleReinforcements: Found unit on land for player number: " + unit.Value.ToString());
+                        foreach (GamePlayer gamePlayer in battlePlayers)
+                        {
+                            if (gamePlayer.playerNumber == unit.Value)
+                            {
+                                UnitScript unitScript = NetworkIdentity.spawned[unit.Key].gameObject.GetComponent<UnitScript>();
+                                if (!unitScript.canUnitReinforce && !unitScript.isUnitReinforcingBattle)
+                                {
+                                    Debug.Log("CheckForPossibleReinforcements: Unit has player owner number of: " + unitScript.ownerPlayerNumber.ToString() + " and the battle player number is: " + gamePlayer.playerNumber + ". Unit has not reinforced for a previous battle. Setting unit as a reinforceable unit.");
+                                    unitScript.canUnitReinforce = true;
+
+                                    if (!gamePlayer.canPlayerReinforce)
+                                        gamePlayer.HandleCanPlayerReinforce(gamePlayer.canPlayerReinforce, true);
+                                        
+                                    if (!canPlayersReinforce)
+                                        canPlayersReinforce = true;
+
+                                    if (!gamePlayer.unitsAvailableForReinforcement.Contains(unitScript.gameObject.GetComponent<NetworkIdentity>().netId))
+                                        gamePlayer.unitsAvailableForReinforcement.Add(unitScript.gameObject.GetComponent<NetworkIdentity>().netId);
+                                }
+                                else if (unitScript.isUnitReinforcingBattle)
+                                {
+                                    Debug.Log("CheckForPossibleReinforcements: Unit reinforced on a previous battle. Setting canUnitReinforce to false");
+                                    unitScript.canUnitReinforce = false;
+                                }
+                                else
+                                {
+                                    unitScript.canUnitReinforce = false;
+                                }
+                                break;
+                            }
+                            
+                        }
+                    }
+                }
+            }
+        }
+        return canPlayersReinforce;
+    }
+    void HandleCanPlayerReinforce(bool oldValue, bool newValue)
+    {
+        if (isServer)
+            canPlayerReinforce = newValue;
+        if (isClient && hasAuthority)
+            GameplayManager.instance.CanLocalPlayerReinforce(newValue);
+    }
+    public void SelectUnitsForReinfocements(List<GameObject> unitsToReinforce)
+    {
+        if (hasAuthority)
+        {
+            Debug.Log("Executing SelectUnitsForReinfocements on gameplayer you have authority over");
+            List<uint> UnitsToReinforceNetIds = new List<uint>();
+            if (unitsToReinforce.Count > 0)
+            {
+                foreach (GameObject unit in unitsToReinforce)
+                {
+                    if(!UnitsToReinforceNetIds.Contains(unit.GetComponent<NetworkIdentity>().netId))
+                        UnitsToReinforceNetIds.Add(unit.GetComponent<NetworkIdentity>().netId);
+                }
+            }
+            Debug.Log("SelectUnitsForReinfocements: Will submit this many units to add as reinforcements: " + UnitsToReinforceNetIds.Count.ToString());
+            CmdPlayerSelectUnitsForReinforcements(UnitsToReinforceNetIds);
+        }
+    }
+    [Command]
+    void CmdPlayerSelectUnitsForReinforcements(List<uint> UnitsToReinforceNetIds)
+    {
+        NetworkIdentity networkIdentity = connectionToClient.identity;
+        GamePlayer requestingPlayer = networkIdentity.GetComponent<GamePlayer>();
+        
+        //Clear out previous data
+        requestingPlayer.playerReinforcementNetIds.Clear();
+        requestingPlayer.playerReinforcementsNumberOfInf = 0;
+        requestingPlayer.playerReinforcementsNumberOfTanks = 0;
+
+        Debug.Log("Executing CmdPlayerSelectUnitsForReinforcements for: " + requestingPlayer.PlayerName + ":" + requestingPlayer.ConnectionId);
+        if (UnitsToReinforceNetIds.Count > 0)
+        {
+            Debug.Log("CmdPlayerSelectUnitsForReinforcements: Player is selecting " + UnitsToReinforceNetIds.Count.ToString() + " reinforcements");
+            foreach (uint unitNetId in UnitsToReinforceNetIds)
+            { 
+                UnitScript unitNetIdScript = NetworkIdentity.spawned[unitNetId].gameObject.GetComponent<UnitScript>();
+                if (unitNetIdScript.canUnitReinforce && !requestingPlayer.playerReinforcementNetIds.Contains(unitNetId) && !unitNetIdScript.isUnitReinforcingBattle)
+                {
+                    Debug.Log("CmdPlayerSelectUnitsForReinforcements: Add the following unit with net id: " + unitNetId.ToString() + " to reinforcement list of player: " + requestingPlayer.PlayerName);
+                    requestingPlayer.playerReinforcementNetIds.Add(unitNetId);
+                    if (unitNetIdScript.gameObject.tag == "tank")
+                        requestingPlayer.playerReinforcementsNumberOfTanks++;
+                    else if(unitNetIdScript.gameObject.tag == "infantry")
+                        requestingPlayer.playerReinforcementsNumberOfInf++;
+                }
+                    
+            }
+        }
+        else
+        {
+            Debug.Log("CmdPlayerSelectUnitsForReinforcements: Player is selecting 0 reinforcements");
+            requestingPlayer.playerReinforcementNetIds.Clear();
+            requestingPlayer.playerReinforcementsNumberOfInf = 0;
+            requestingPlayer.playerReinforcementsNumberOfTanks = 0;
+        }
+        TargetUpdateReinforcementText(connectionToClient, requestingPlayer.playerReinforcementsNumberOfInf, requestingPlayer.playerReinforcementsNumberOfTanks);
+    }
+    [TargetRpc]
+    void TargetUpdateReinforcementText(NetworkConnection target, int numberOfInf, int numberOfTanks)
+    {
+        Debug.Log("Executing TargetUpdateReinforcementText");
+        if (hasAuthority)
+        {
+            GameplayManager.instance.UpdateReinforcementText(numberOfInf, numberOfTanks);
+        }
+    }
+    [Server]
+    void SetIsUnitReinforcingBattleOnUnits()
+    {
+        Debug.Log("Executing SetIsUnitReinforcingBattleOnUnits on the server");
+        foreach (GamePlayer gamePlayer in Game.GamePlayers)
+        {
+            if (gamePlayer.playerReinforcementNetIds.Count > 0)
+            {
+                gamePlayer.didPlayerReinforce = true;
+                GameplayManager.instance.HandleDidAPlayerReinforce(GameplayManager.instance.didAPlayerReinforce, true);
+                foreach (uint unitNetId in gamePlayer.playerReinforcementNetIds)
+                { 
+                    UnitScript unitNetIdScript = NetworkIdentity.spawned[unitNetId].gameObject.GetComponent<UnitScript>();
+                    if (unitNetIdScript.canUnitReinforce && !unitNetIdScript.isUnitReinforcingBattle)
+                    {
+                        Debug.Log("SetIsUnitReinforcingBattleOnUnits: set isUnitReinforcingBattle for unit: " + unitNetIdScript.gameObject + " that has a network id of: " + unitNetId.ToString());
+                        unitNetIdScript.isUnitReinforcingBattle = true;
+                    }
+                }
+            }
+        }
+    }
+    [Server]
+    void CleanupPlayerReinforcementInfo()
+    {
+        Debug.Log("Executing CleanupPlayerReinforcementInfo on the server.");
+        foreach (GamePlayer gamePlayer in Game.GamePlayers)
+        {
+            if (gamePlayer.didPlayerReinforce)
+            {
+                gamePlayer.HandleCanPlayerReinforce(gamePlayer.canPlayerReinforce, false);
+
+                gamePlayer.playerReinforcementsNumberOfInf = 0;
+                gamePlayer.playerReinforcementsNumberOfTanks = 0;
+                gamePlayer.playerArmyReinforcementPower = 0;
+
+                /*if (gamePlayer.playerReinforcementNetIds.Count > 0)
+                {
+                    Debug.Log("CleanupPlayerReinforcementInfo: setting reinforcing units canUnitReinforce value to false");
+                    foreach (uint reinforcementNetId in gamePlayer.playerReinforcementNetIds)
+                    { 
+                        UnitScript reinforcementNetIdScript = NetworkIdentity.spawned[reinforcementNetId].gameObject.GetComponent<UnitScript>();
+                        if (reinforcementNetIdScript.canUnitReinforce && reinforcementNetIdScript.isUnitReinforcingBattle)
+                        {
+                            reinforcementNetIdScript.HandleCanUnitReinforce(reinforcementNetIdScript.canUnitReinforce, false);
+                        }
+                    }
+                }*/
+
+                gamePlayer.playerReinforcementNetIds.Clear();
+                gamePlayer.didPlayerReinforce = false;   
+            }
+            //Set all units with canReinforce as true back to false
+            GameObject unitHolder = gamePlayer.myUnitHolder;
+            PlayerUnitHolder unitHolderScript = unitHolder.GetComponent<PlayerUnitHolder>();
+            if (unitHolderScript.ownerConnectionId == gamePlayer.ConnectionId)
+            {
+                Debug.Log("CleanupPlayerReinforcementInfo: setting all units canUnitReinforce value to false for player: " + gamePlayer.PlayerName);
+                foreach (Transform unitChild in unitHolder.transform)
+                {
+                    UnitScript unitChildScript = unitChild.GetComponent<UnitScript>();
+                    if (unitChildScript.canUnitReinforce)
+                    {
+                        unitChildScript.HandleCanUnitReinforce(unitChildScript.canUnitReinforce, false);
+                    }
+                }
+            }
+        }
+    }
+    [Server]
+    void CleanupGameplayManagerReinforcementInfo()
+    {
+        if (GameplayManager.instance.didAPlayerReinforce)
+        {
+            GameplayManager.instance.HandleReinforcementsBattleSiteUpdate(GameplayManager.instance.reinforcementsBattleSite, 0);
+            GameplayManager.instance.HandleDidAPlayerReinforce(GameplayManager.instance.didAPlayerReinforce, false);
+        }
+    }
+    [Server]
+    void ResetUnitReinforcementValues()
+    {
+        Debug.Log("Executing ResetUnitReinforcementValues on the server");
+        foreach (GamePlayer gamePlayer in Game.GamePlayers)
+        {
+            GameObject unitHolder = gamePlayer.myUnitHolder;
+            PlayerUnitHolder unitHolderScript = unitHolder.GetComponent<PlayerUnitHolder>();
+            if (unitHolderScript.ownerConnectionId == gamePlayer.ConnectionId)
+            {
+                Debug.Log("CleanupPlayerReinforcementInfo: setting all units reinforcement values to false for player: " + gamePlayer.PlayerName);
+                foreach (Transform unitChild in unitHolder.transform)
+                {
+                    UnitScript unitChildScript = unitChild.GetComponent<UnitScript>();
+                    if (unitChildScript.canUnitReinforce)
+                    {
+                        unitChildScript.HandleCanUnitReinforce(unitChildScript.canUnitReinforce, false);
+                    }
+                    if (unitChildScript.isUnitReinforcingBattle)
+                    {
+                        unitChildScript.isUnitReinforcingBattle = false;
+                    }
+                }
+            }
+        }
+
     }
 }
 

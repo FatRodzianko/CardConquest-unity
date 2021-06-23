@@ -33,6 +33,10 @@ public class UnitScript : NetworkBehaviour
     [SerializeField] GameObject unitDeadIconPrefab;
     GameObject unitDeadIconObject;
 
+    [Header("Reinforcements Section")]
+    [SyncVar(hook = nameof(HandleCanUnitReinforce))] public bool canUnitReinforce = false;
+    [SyncVar] public bool isUnitReinforcingBattle = false;
+
     // Start is called before the first frame update
     void Start()
     {
@@ -50,6 +54,7 @@ public class UnitScript : NetworkBehaviour
     }
     public void ClickedOn()
     {
+        Debug.Log("Executing: ClickedOn. The currently selected value is set to: " + currentlySelected.ToString());
         if (currentlySelected)
         {
             outline.SetActive(true);
@@ -59,11 +64,15 @@ public class UnitScript : NetworkBehaviour
         }
         else if (!currentlySelected)
         {
-            if (outline.activeInHierarchy)
+            if (outline)
             {
                 Debug.Log("Currently selected set to false. Deactivating outline");
                 outline.SetActive(false);
             }
+        }
+        else
+        {
+            Debug.Log("ClickedOn: somehow currentlySelected is neither true nor false");
         }
     }
 
@@ -85,6 +94,11 @@ public class UnitScript : NetworkBehaviour
         if (GameplayManager.instance.currentGamePhase == "Unit Placement")
             placedDuringUnitPlacement = true;
         UpdateUnitLandObject(LandToMoveTo);
+        if (GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements") && this.canUnitReinforce && !this.isUnitReinforcingBattle)
+        {
+            if (this.currentLandOccupied)
+                this.currentLandOccupied.GetComponent<LandScript>().ExpandForReinforcements(true);
+        }
         
         //LandToMoveTo.GetComponent<LandScript>().RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
         
@@ -556,6 +570,35 @@ public class UnitScript : NetworkBehaviour
                 landScript.UnitNetIdsAndPlayerNumber.Remove(unitNetId);
 
             landScript.RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
+        }
+    }
+    public void HandleCanUnitReinforce(bool oldValue, bool newValue)
+    {
+        if (isServer)
+            canUnitReinforce = newValue;
+        if (isClient && newValue)
+        {
+            if (!this.gameObject.activeInHierarchy && GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
+                this.gameObject.SetActive(true);
+            if (currentLandOccupied)
+                currentLandOccupied.GetComponent<LandScript>().ExpandForReinforcements(true);
+        }
+        if (isClient && !newValue)
+        {
+            if (this.gameObject.activeInHierarchy && GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
+                this.gameObject.SetActive(false);
+        }
+    }
+    public void HandleIsUnitReinforcingBattle(bool oldValue, bool newValue)
+    {
+        if (isServer)
+            canUnitReinforce = newValue;
+        if (isClient && newValue)
+        {
+            if (!this.gameObject.activeInHierarchy && GameplayManager.instance.currentGamePhase.StartsWith("Choose Cards"))
+                this.gameObject.SetActive(true);
+            if (currentLandOccupied)
+                currentLandOccupied.GetComponent<LandScript>().ExpandForReinforcements(false);
         }
     }
 }
