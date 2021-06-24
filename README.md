@@ -11,7 +11,7 @@ This will be my main version of the CardConquest game going forward instead of t
 To get connections to work over LAN, you may need to disable windows firewall. If you are the host, you may need to run the game as an Administrator to have the TCP port open for connections
 
 ## Current features implemented
-* Reinforcements
+* Reinforcements for battles
 
 ## Features that may be added someday if I ever stop being lazy
 * Special abilities for cards – right now, the cards are pretty simple. I’d like to add “abilities” to the cards that affect the battles. An example would be, if you play this card and ONLY played infantry units in your army, all infantry have a power of 2 instead of 1. Or something like, if the opposing player has no tanks in their army, you get +1 to your battle score if you have a at least 1 tank. Stuff like that
