@@ -106,10 +106,12 @@ MonoBehaviour:
   Power: 5
   AttackValue: 2
   DefenseValue: 2
+  SpecialAbilityNumber: 0
   currentlySelected: 0
   cardOutlinePrefab: {fileID: 4983412581011409644, guid: 61a1c6067b29d4b4c811064160c681e9,
     type: 3}
   cardOutlineObject: {fileID: 0}
+  isClickable: 1
 --- !u!61 &3010259902049556265
 BoxCollider2D:
   m_ObjectHideFlags: 0

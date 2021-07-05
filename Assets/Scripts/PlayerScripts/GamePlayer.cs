@@ -55,8 +55,10 @@ public class GamePlayer : NetworkBehaviour
     [SyncVar] public int playerArmyNumberOfInf;
     [SyncVar] public int playerArmyNumberOfTanks;
     [SyncVar] public int playerArmyReinforcementPower;
-    [SyncVar] public int playerBattleScore;
+    [SyncVar(hook = nameof(HandlePlayerBattleScoreValueSet))] public int playerBattleScore;
     [SyncVar(hook = nameof(HandleBattleScoreSet))] public bool isPlayerBattleScoreSet = false;
+    [SyncVar(hook = nameof(HandlePlayerCardAbilityActivated))] public bool didPlayerCardAbilityActivate = false;
+    [SyncVar] public int playerCardAbilityNumber = 0;
 
     [Header("Battle Card Info")]
     [SyncVar(hook = nameof(HandleUpdatedPlayerBattleCard))] public uint playerBattleCardNetId;
@@ -383,6 +385,7 @@ public class GamePlayer : NetworkBehaviour
                     if (cardScript.ownerConnectionId == LocalGamePlayerScript.ConnectionId)
                     {
                         card.transform.SetParent(playerCardHand.transform);
+                        cardScript.myPlayerHandObject = playerCardHand;
                         //card.transform.position = new Vector3(-1000, -1000, 0);
                     }
                 }
@@ -403,6 +406,7 @@ public class GamePlayer : NetworkBehaviour
                             if (cardScript.ownerConnectionId == gamePlayerScript.ConnectionId)
                             {
                                 card.transform.SetParent(playerCardHand.transform);
+                                cardScript.myPlayerHandObject = playerCardHand;
                                 //card.transform.position = new Vector3(-1000, -1000, 0);
                             }
                         }
@@ -1061,6 +1065,38 @@ public class GamePlayer : NetworkBehaviour
         //Calculate player2 score
         player2BattleScore = player2.playerBattleScore;
         player2BattleScore += player2Card.Power;
+        if (CheckIfCardPowerActivatesForBattle())
+        {
+            Debug.Log("DetermineWhoWonBattle: CheckIfCardPowerActivatesForBattle returned true. Checking which player had their card ability activate.");
+            if (player1.didPlayerCardAbilityActivate)
+            {
+                Debug.Log("DetermineWhoWonBattle: Card ability activated for player: " + player1.PlayerName);
+                Card playerBattleCard = NetworkIdentity.spawned[player1.playerBattleCardNetId].gameObject.GetComponent<Card>();
+                if (playerBattleCard.SpecialAbilityNumber == 1 && player1.playerCardAbilityNumber == 1)
+                {
+                    Debug.Log("DetermineWhoWonBattle: Card Ability 1 for \"If your army has inf but no tanks, +2 battle score\" activated for player: " + player1.PlayerName);
+                    //player1.playerBattleScore += 2;
+                    player1.HandlePlayerBattleScoreValueSet(player1.playerBattleScore, player1.playerBattleScore += 2);
+                    player1BattleScore +=2;
+                }
+            }
+            if (player2.didPlayerCardAbilityActivate)
+            {
+                Debug.Log("DetermineWhoWonBattle: Card ability activated for player: " + player2.PlayerName);
+                Card playerBattleCard = NetworkIdentity.spawned[player2.playerBattleCardNetId].gameObject.GetComponent<Card>();
+                if (playerBattleCard.SpecialAbilityNumber == 1 && player2.playerCardAbilityNumber == 1)
+                {
+                    Debug.Log("DetermineWhoWonBattle: Card Ability 1 for \"If your army has inf but no tanks, +2 battle score\" activated for player: " + player2.PlayerName);
+                    //player2.playerBattleScore += 2;
+                    player2.HandlePlayerBattleScoreValueSet(player2.playerBattleScore, player2.playerBattleScore += 2);
+                    player2BattleScore += 2;
+                }
+            }
+        }
+        else
+        {
+            Debug.Log("DetermineWhoWonBattle: CheckIfCardPowerActivatesForBattle returned FALSE.");
+        }
 
         if (player1BattleScore > player2BattleScore)
         {
@@ -1174,6 +1210,8 @@ public class GamePlayer : NetworkBehaviour
         {
             Card winningCard = NetworkIdentity.spawned[winningPlayer.playerBattleCardNetId].gameObject.GetComponent<Card>();
             Card losingCard = NetworkIdentity.spawned[losingPlayer.playerBattleCardNetId].gameObject.GetComponent<Card>();
+
+            int winningPlayerAttackValue = winningCard.AttackValue;
 
             if (winningCard.AttackValue > losingCard.DefenseValue)
             {
@@ -1528,6 +1566,19 @@ public class GamePlayer : NetworkBehaviour
                         if (battleSiteScript.UnitNetIdsAndPlayerNumber.ContainsKey(unitNetId))
                             battleSiteScript.UnitNetIdsAndPlayerNumber.Remove(unitNetId);
 
+                        if (unitNetIdScript.currentLandOccupied)
+                        {
+                            if (unitNetIdScript.currentLandOccupied.transform.position != battleSiteScript.gameObject.transform.position)
+                            {
+                                Debug.Log("DestroyUnitsLostInBattle: Removing unit from their occupied land lists");
+                                LandScript currentOccupiedLandScript = unitNetIdScript.currentLandOccupied.GetComponent<LandScript>();
+                                if (currentOccupiedLandScript.UnitNetIdsOnLand.Contains(unitNetId))
+                                    currentOccupiedLandScript.UnitNetIdsOnLand.Remove(unitNetId);
+                                if (currentOccupiedLandScript.UnitNetIdsAndPlayerNumber.ContainsKey(unitNetId))
+                                    currentOccupiedLandScript.UnitNetIdsAndPlayerNumber.Remove(unitNetId);
+                            }
+                        }
+
                         if (gamePlayer.playerUnitNetIds.Count == 0)
                         {
                             Debug.Log("No more units remaining for: " + gamePlayer.PlayerName);
@@ -1553,6 +1604,7 @@ public class GamePlayer : NetworkBehaviour
     [Server]
     bool CheckIfUnitsAreLeftToRetreat()
     {
+        Debug.Log("Executing CheckIfUnitsAreLeftToRetreat on the server.");
         bool areAnyUnitsLeftToRetreat = false;
         foreach (GamePlayer player in Game.GamePlayers)
         {
@@ -1571,6 +1623,7 @@ public class GamePlayer : NetworkBehaviour
             if (areAnyUnitsLeftToRetreat)
                 break;
         }
+        Debug.Log("CheckIfUnitsAreLeftToRetreat: will return: " + areAnyUnitsLeftToRetreat.ToString());
         return areAnyUnitsLeftToRetreat;
     }
     [Server]
@@ -1643,6 +1696,9 @@ public class GamePlayer : NetworkBehaviour
         //Cleanup stuff for reinforcements
         CleanupPlayerReinforcementInfo();
         CleanupGameplayManagerReinforcementInfo();
+
+        //Cleanup stuff for card abilities
+        RpcClearCardAbilityInfo();
     }
     /*
     [ClientRpc]
@@ -2022,7 +2078,7 @@ public class GamePlayer : NetworkBehaviour
                 {
                     if (battlePlayerNumbers.Contains(unit.Value))
                     {
-                        Debug.Log("CheckForPossibleReinforcements: Found unit on land for player number: " + unit.Value.ToString());
+                        Debug.Log("CheckForPossibleReinforcements: Found unit on land for player number: " + unit.Value.ToString() + " on land object: " + landScript.gameObject);
                         foreach (GamePlayer gamePlayer in battlePlayers)
                         {
                             if (gamePlayer.playerNumber == unit.Value)
@@ -2206,11 +2262,14 @@ public class GamePlayer : NetworkBehaviour
     [Server]
     void CleanupGameplayManagerReinforcementInfo()
     {
-        if (GameplayManager.instance.didAPlayerReinforce)
+        Debug.Log("Executing: CleanupGameplayManagerReinforcementInfo");
+        /*if (GameplayManager.instance.didAPlayerReinforce)
         {
             GameplayManager.instance.HandleReinforcementsBattleSiteUpdate(GameplayManager.instance.reinforcementsBattleSite, 0);
             GameplayManager.instance.HandleDidAPlayerReinforce(GameplayManager.instance.didAPlayerReinforce, false);
-        }
+        }*/
+        GameplayManager.instance.HandleReinforcementsBattleSiteUpdate(GameplayManager.instance.reinforcementsBattleSite, 0);
+        GameplayManager.instance.HandleDidAPlayerReinforce(GameplayManager.instance.didAPlayerReinforce, false);
     }
     [Server]
     void ResetUnitReinforcementValues()
@@ -2239,5 +2298,265 @@ public class GamePlayer : NetworkBehaviour
         }
 
     }
+    [Server]
+    bool CheckIfCardPowerActivatesForBattle()
+    {
+        Debug.Log("Executing CheckIfCardPowerActivatesForBattle on the server");
+
+        //Dictionary<int, int> playerNumberAndCardAbility = new Dictionary<int, int>();
+        //cardAbilityNumberAndPlayerNumber.Add(0, 0);
+        bool didPalyerCardAbilityActivate = false;
+
+        List<GamePlayer> BattlePlayers = GetBattlePlayers(GameplayManager.instance.currentBattleSite);
+        if (BattlePlayers.Count > 0)
+        {
+            List<Card> battlePlayerCards = new List<Card>();
+            foreach (GamePlayer battlePlayer in BattlePlayers)
+            {
+                battlePlayerCards.Add(NetworkIdentity.spawned[battlePlayer.playerBattleCardNetId].gameObject.GetComponent<Card>());
+            }
+            if (battlePlayerCards.Any(x => x.SpecialAbilityNumber != 0))
+            {
+                Debug.Log("CheckIfCardPowerActivatesForBattle: at least 1 player battle card has a special ability to check.");
+                /*foreach (GamePlayer battlePlayer in BattlePlayers)
+                {
+                    Card playerBattleCard = NetworkIdentity.spawned[battlePlayer.playerBattleCardNetId].gameObject.GetComponent<Card>();
+                }*/
+                foreach (Card playerBattleCard in battlePlayerCards)
+                {
+                    Debug.Log("CheckIfCardPowerActivatesForBattle: Card to check: " + playerBattleCard.CardName + " with special ability number: " + playerBattleCard.SpecialAbilityNumber.ToString() + " for player: " + playerBattleCard.ownerPlayerName);
+                    if (playerBattleCard.SpecialAbilityNumber == 0)
+                    {
+                        Debug.Log("CheckIfCardPowerActivatesForBattle: found player battle card that has special ability 0 for player: " + playerBattleCard.ownerPlayerName + ". Moving to next card.");
+                        continue;
+                    }
+                    else if (playerBattleCard.SpecialAbilityNumber == 1)
+                    {
+                        Debug.Log("CheckIfCardPowerActivatesForBattle: found player battle card that has special ability 1 for player: " + playerBattleCard.ownerPlayerName);
+                        foreach (GamePlayer battlePlayer in BattlePlayers)
+                        {
+                            if (battlePlayer.playerNumber == playerBattleCard.ownerPlayerNumber && battlePlayer.ConnectionId == playerBattleCard.ownerConnectionId)
+                            {
+                                if (DidCardAbility1Activate(battlePlayer))
+                                {
+                                    Debug.Log("CheckIfCardPowerActivatesForBattle: DidCardAbility1Activate returned true for player: " + battlePlayer.PlayerName);
+                                    //playerNumberAndCardAbility.Add(battlePlayer.playerNumber, 1);
+                                    battlePlayer.HandlePlayerCardAbilityActivated(battlePlayer.didPlayerCardAbilityActivate, true);
+                                    battlePlayer.playerCardAbilityNumber = 1;
+                                    didPalyerCardAbilityActivate = true;
+                                }
+                                else
+                                {
+                                    Debug.Log("CheckIfCardPowerActivatesForBattle: DidCardAbility1Activate returned FALSE for player: " + battlePlayer.PlayerName);
+                                }
+                            }
+                        }
+                    }
+                    else if (playerBattleCard.SpecialAbilityNumber == 2)
+                    {
+                        Debug.Log("CheckIfCardPowerActivatesForBattle: found player battle card that has special ability 2 for player: " + playerBattleCard.ownerPlayerName);
+                        foreach (GamePlayer battlePlayer in BattlePlayers)
+                        {
+                            if (battlePlayer.playerNumber == playerBattleCard.ownerPlayerNumber && battlePlayer.ConnectionId == playerBattleCard.ownerConnectionId)
+                            {
+                                if (DidCardAbility2Activate(battlePlayer, BattlePlayers))
+                                {
+                                    Debug.Log("CheckIfCardPowerActivatesForBattle: DidCardAbility2Activate returned true for player: " + battlePlayer.PlayerName);
+                                    //playerNumberAndCardAbility.Add(battlePlayer.playerNumber, 1);
+                                    battlePlayer.HandlePlayerCardAbilityActivated(battlePlayer.didPlayerCardAbilityActivate, true);
+                                    battlePlayer.playerCardAbilityNumber = 2;
+                                    playerBattleCard.HandleAbilityActivated(playerBattleCard.didAbilityActivate, true);
+                                    didPalyerCardAbilityActivate = true;
+                                }
+                                else
+                                {
+                                    Debug.Log("CheckIfCardPowerActivatesForBattle: DidCardAbility2Activate returned FALSE for player: " + battlePlayer.PlayerName);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                Debug.Log("CheckIfCardPowerActivatesForBattle: No player battle cards had any special abilities. Returning 0");
+                //playerNumberAndCardAbility.Clear();
+                //Add card ability number of 0 and player number of 0 aka no special ability
+                //cardAbilityNumberAndPlayerNumber.Add(0, 0);
+                //return playerNumberAndCardAbility;
+                didPalyerCardAbilityActivate = false;
+                return didPalyerCardAbilityActivate;
+
+            }
+        }
+        //Debug.Log("CheckIfCardPowerActivatesForBattle: returning the following value for what card ability was activated: " + playerNumberAndCardAbility.ToString());
+        //return playerNumberAndCardAbility;
+        Debug.Log("CheckIfCardPowerActivatesForBattle: returning the following value: " + didPalyerCardAbilityActivate.ToString());
+        return didPalyerCardAbilityActivate;
+    }
+    [Server]
+    List<GamePlayer> GetBattlePlayers(uint battleSiteNetId)
+    {
+        Debug.Log("Executing GetBattlePlayers on the server.");
+        List<GamePlayer> BattlePlayers = new List<GamePlayer>();
+
+        LandScript battleSiteLandScript = NetworkIdentity.spawned[battleSiteNetId].gameObject.GetComponent<LandScript>();
+        List<int> battlePlayerNumbers = new List<int>();
+        foreach (KeyValuePair<uint, int> battleUnitPlayer in battleSiteLandScript.UnitNetIdsAndPlayerNumber)
+        {
+            bool isPlayerNumberInList = battlePlayerNumbers.Contains(battleUnitPlayer.Value);
+            if (!isPlayerNumberInList)
+                battlePlayerNumbers.Add(battleUnitPlayer.Value);
+        }
+
+        if (battlePlayerNumbers.Count > 0)
+        {
+            foreach (GamePlayer gamePlayer in Game.GamePlayers)
+            {
+                if (battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                    BattlePlayers.Add(gamePlayer);
+                else if (GameplayManager.instance.isPlayerBaseDefense)
+                {
+                    if (gamePlayer.myPlayerBasePosition == battleSiteLandScript.gameObject.transform.position)
+                    {
+                        Debug.Log("GetBattlePlayers: Battle was a base defense and the defending player was found");
+                        if (!battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                            BattlePlayers.Add(gamePlayer);
+
+                    }
+                }
+            }
+        }
+
+        Debug.Log("GetBattlePlayers: Will return the following number of battle players: " + BattlePlayers.Count.ToString());
+        return BattlePlayers;
+    }
+    [Server]
+    bool DidCardAbility1Activate(GamePlayer playerWith1Card)
+    {
+        Debug.Log("Executing DidCardAbility1Activate for player: " + playerWith1Card.PlayerName + " That ability is: \"If your army has inf but no tanks, +2 battle score\"");
+        bool didAbilityActivate = false;
+
+        if (playerWith1Card.playerArmyNetIds.Count > 0)
+        {
+            foreach (uint unitNetId in playerWith1Card.playerArmyNetIds)
+            {
+                GameObject unit = NetworkIdentity.spawned[unitNetId].gameObject;
+                if (unit.tag == "infantry")
+                    didAbilityActivate = true;
+                else
+                {
+                    Debug.Log("DidCardAbility1Activate: Found unit that is not tagged as an infantry. Returning false.");
+                    didAbilityActivate = false;
+                    return didAbilityActivate;
+                }
+            }
+        }
+        if (playerWith1Card.didPlayerReinforce && playerWith1Card.playerReinforcementNetIds.Count > 0)
+        {
+            foreach (uint unitNetId in playerWith1Card.playerReinforcementNetIds)
+            {
+                GameObject unit = NetworkIdentity.spawned[unitNetId].gameObject;
+                if (unit.tag == "infantry")
+                    didAbilityActivate = true;
+                else
+                {
+                    Debug.Log("DidCardAbility1Activate: Found REINFORCING unit that is not tagged as an infantry. Returning false.");
+                    didAbilityActivate = false;
+                    return didAbilityActivate;
+                }
+            }
+        }
+        Debug.Log("DidCardAbility1Activate: Returning: " + didAbilityActivate.ToString() + " for player: " + playerWith1Card.PlayerName);
+        return didAbilityActivate;
+    }
+    [Server]
+    bool DidCardAbility2Activate(GamePlayer playerWith2Card, List<GamePlayer> BattlePlayers)
+    {
+        Debug.Log("Executing DidCardAbility2Activate for player: " + playerWith2Card.PlayerName + " That ability is: \"If opp. army has no tanks, +1 attack value\"");
+        bool didAbilityActivate = false;
+        // Get the opponent player object
+        GamePlayer opponentPlayer = null;
+        foreach (GamePlayer battlePlayer in BattlePlayers)
+        {
+            if (battlePlayer.PlayerName == playerWith2Card.PlayerName && battlePlayer.ConnectionId == playerWith2Card.ConnectionId && battlePlayer.playerNumber == playerWith2Card.playerNumber)
+            {
+                continue;
+            }
+            else
+            {
+                Debug.Log("DidCardAbility2Activate: found opponent player. Player with card is: " + playerWith2Card.PlayerName + " opponent is: " + battlePlayer.PlayerName);
+                opponentPlayer = battlePlayer;
+                break;
+            }
+        }
+        if (opponentPlayer != null)
+        {
+            if (opponentPlayer.playerArmyNetIds.Count > 0)
+            {
+                foreach (uint unitNetId in opponentPlayer.playerArmyNetIds)
+                {
+                    GameObject unit = NetworkIdentity.spawned[unitNetId].gameObject;
+                    if (unit.tag == "infantry")
+                        didAbilityActivate = true;
+                    else
+                    {
+                        Debug.Log("DidCardAbility2Activate: Found unit that is not tagged as an infantry. Returning false.");
+                        didAbilityActivate = false;
+                        return didAbilityActivate;
+                    }
+                }
+            }
+        }
+        Debug.Log("DidCardAbility1Activate: Returning: " + didAbilityActivate.ToString() + " for player: " + playerWith2Card.PlayerName);
+        return didAbilityActivate;
+    }
+    [ClientRpc]
+    void RpcClearCardAbilityInfo()
+    {
+        GameObject LocalGamePlayer = GameObject.Find("LocalGamePlayer");
+        GamePlayer LocalGamePlayerScript = LocalGamePlayer.GetComponent<GamePlayer>();
+        LocalGamePlayerScript.ClearCardAbilityInfo();
+    }
+    public void ClearCardAbilityInfo()
+    {
+        if (hasAuthority)
+            CmdClearCardAbilityInfo();
+    }
+    [Command]
+    void CmdClearCardAbilityInfo()
+    {
+        NetworkIdentity networkIdentity = connectionToClient.identity;
+        GamePlayer requestingPlayer = networkIdentity.GetComponent<GamePlayer>();
+        Debug.Log("Executing CmdClearCardAbilityInfo for " + requestingPlayer.PlayerName);
+        //requestingPlayer.didPlayerCardAbilityActivate = false;
+        requestingPlayer.HandlePlayerCardAbilityActivated(requestingPlayer.didPlayerCardAbilityActivate, false);
+        requestingPlayer.playerCardAbilityNumber = 0;
+    }
+    void HandlePlayerBattleScoreValueSet(int oldValue, int newValue)
+    {
+        if (isServer)
+        {
+            this.playerBattleScore = newValue;
+        }
+        if (isClient && newValue != 0)
+        {
+            Debug.Log("Running HandlePlayerBattleScoreValueSet as a client. New value set to " + newValue.ToString());
+            GameplayManager.instance.UpdatePlayerBattleScoreInPanel(this);
+        }
+    }
+    void HandlePlayerCardAbilityActivated(bool oldValue, bool newValue)
+    {
+        if (isServer)
+        {
+            this.didPlayerCardAbilityActivate = newValue;
+        }
+        if (isClient && newValue)
+        {
+            Debug.Log("Running HandlePlayerCardAbilityActivated as a client. New value set to " + newValue.ToString());
+            GameplayManager.instance.UpdatePlayerCardAbilityText(this);
+        }
+    }
+
 }
 

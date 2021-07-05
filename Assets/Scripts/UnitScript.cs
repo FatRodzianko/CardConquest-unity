@@ -574,6 +574,7 @@ public class UnitScript : NetworkBehaviour
     }
     public void HandleCanUnitReinforce(bool oldValue, bool newValue)
     {
+        Debug.Log("executing HandleCanUnitReinforce");
         if (isServer)
             canUnitReinforce = newValue;
         if (isClient && newValue)
@@ -591,6 +592,7 @@ public class UnitScript : NetworkBehaviour
     }
     public void HandleIsUnitReinforcingBattle(bool oldValue, bool newValue)
     {
+        Debug.Log("executing HandleIsUnitReinforcingBattle");
         if (isServer)
             canUnitReinforce = newValue;
         if (isClient && newValue)

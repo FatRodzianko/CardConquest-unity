@@ -80,14 +80,31 @@ MonoBehaviour:
   PlayerCardHand: {fileID: 1293418988158758273, guid: 219f33da9199f804a8429d024ad06936,
     type: 3}
   Cards:
-  - {fileID: 6159386528969739899, guid: 9896da357fff94f4db3cba1a133bce0c, type: 3}
-  - {fileID: 9032688433472669252, guid: 6557e0a5d3a84c64ca43446ffb65ebdf, type: 3}
-  - {fileID: 3217454983651605336, guid: c0c10ec4eda0d3d4c97ff19e1feca0a3, type: 3}
-  - {fileID: 5704795566307507674, guid: cad28f01059c2084faa1634adfefdbb5, type: 3}
-  - {fileID: 3404837509909957055, guid: 94e73b0af4c391844882a2d6ace9f280, type: 3}
+  - {fileID: 3404837509909957055, guid: 96e82b0bf3733044e999ddf9259978ba, type: 3}
+  - {fileID: 3404837509909957055, guid: 38b45a583de13cc4b97ed0e46527a666, type: 3}
+  - {fileID: 3404837509909957055, guid: 2c938297828bc514b97d01deb26064d5, type: 3}
+  - {fileID: 3404837509909957055, guid: ae324789863841246b6425f1a919eb27, type: 3}
+  - {fileID: 3404837509909957055, guid: 7982f6bef1458d94c91c420d2ca77ca8, type: 3}
   myPlayerBase: {fileID: 0}
+  myPlayerBasePosition: {x: 0, y: 0, z: 0}
+  myPlayerBaseNetId: 0
   myUnitHolder: {fileID: 0}
+  myPlayerCardHand: {fileID: 0}
   HaveSpawnedUnits: 0
   GotPlayerBase: 0
   HaveSpawnedCards: 0
   ReadyForNextPhase: 0
+  canPlayerReinforce: 0
+  didPlayerReinforce: 0
+  playerReinforcementsNumberOfInf: 0
+  playerReinforcementsNumberOfTanks: 0
+  updatedUnitPositionsForBattleSites: 0
+  playerArmyNumberOfInf: 0
+  playerArmyNumberOfTanks: 0
+  playerArmyReinforcementPower: 0
+  playerBattleScore: 0
+  isPlayerBattleScoreSet: 0
+  playerBattleCardNetId: 0
+  selectedCard: {fileID: 0}
+  doesPlayerNeedToRetreat: 0
+  canPlayerRetreat: 0

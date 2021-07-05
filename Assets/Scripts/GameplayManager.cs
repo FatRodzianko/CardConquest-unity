@@ -87,9 +87,11 @@ public class GameplayManager : NetworkBehaviour
     public GameObject opponentPlayerBattlePanel;
     private GameObject localCardText;
     private GameObject localCardPower;
+    private GameObject localCardAbilityText;
     private GameObject opponentCardText;
     private GameObject opponentSelectCardText;
     private GameObject opponentCardPower;
+    private GameObject opponentCardAbilityText;
     [SerializeField] private GameObject showNearybyUnitsButton;
     [SerializeField] private GameObject showReinforcingUnitsButton;
     public bool showingNearbyUnits = false;
@@ -1438,7 +1440,8 @@ public class GameplayManager : NetworkBehaviour
                 if (child.tag == "Card")
                 {
                     Debug.Log("Card object found as child of localPlayerBattlePanel. Removing as a child object.");
-                    child.transform.parent = null;
+                    child.transform.parent = child.gameObject.GetComponent<Card>().myPlayerHandObject.transform;
+                    child.gameObject.SetActive(false);
                 }
             }
             Destroy(localPlayerBattlePanel);
@@ -1452,7 +1455,8 @@ public class GameplayManager : NetworkBehaviour
                 if (child.tag == "Card")
                 {
                     Debug.Log("Card object found as child of opponentPlayerBattlePanel. Removing as a child object.");
-                    child.transform.parent = null;
+                    child.transform.parent = child.gameObject.GetComponent<Card>().myPlayerHandObject.transform;
+                    child.gameObject.SetActive(false);
                 }
             }
             Destroy(opponentPlayerBattlePanel);
@@ -1508,6 +1512,11 @@ public class GameplayManager : NetworkBehaviour
                 {
                     localCardPower = childTransform.gameObject;
                     localCardPower.SetActive(false);
+                }
+                if (childTransform.name == "CardAbilityText")
+                {
+                    localCardAbilityText = childTransform.gameObject;
+                    localCardAbilityText.SetActive(false);
                 }
             }
         }
@@ -1571,6 +1580,11 @@ public class GameplayManager : NetworkBehaviour
                     opponentCardPower = childTransform.gameObject;
                     opponentCardPower.SetActive(false);
                 }
+                if (childTransform.name == "CardAbilityText")
+                {
+                    opponentCardAbilityText = childTransform.gameObject;
+                    opponentCardAbilityText.SetActive(false);
+                }
             }
         }        
     }
@@ -1627,28 +1641,49 @@ public class GameplayManager : NetworkBehaviour
             isPlayerViewingOpponentHand = false;
         }
         
-        SetOpponentBattleScoreAndCard();
+        SetOpponentBattleScoreAndCard(true);
     }
-    void SetOpponentBattleScoreAndCard()
+    void SetOpponentBattleScoreAndCard(bool isOpponentPlayer)
     {
-        GamePlayer opponentGamePlayer = GameObject.FindGameObjectWithTag("GamePlayer").GetComponent<GamePlayer>();
-        if (opponentGamePlayer.playerBattleCardNetId > 0)
+        Debug.Log("Executing SetOpponentBattleScoreAndCard. Is this for the opponent player panel?: " + isOpponentPlayer.ToString());
+        if (isOpponentPlayer)
         {
-            //find opponent card and reposition it under the opponent battle panel
-            GameObject opponentSelectedCard = NetworkIdentity.spawned[opponentGamePlayer.playerBattleCardNetId].gameObject;
-            opponentGamePlayer.selectedCard = opponentSelectedCard;
-            opponentSelectedCard.SetActive(true);
-            opponentSelectedCard.transform.SetParent(opponentPlayerBattlePanel.transform);
-            opponentSelectedCard.transform.localPosition = new Vector3(-27f, -110f, 1f);
-            opponentSelectedCard.transform.localScale = new Vector3(70f, 70f, 1f);
+            if (opponentPlayerBattlePanel)
+            {
+                Debug.Log("SetOpponentBattleScoreAndCard: updating opponents battle score");
+                GamePlayer opponentGamePlayer = GameObject.FindGameObjectWithTag("GamePlayer").GetComponent<GamePlayer>();
+                if (opponentGamePlayer.playerBattleCardNetId > 0)
+                {
+                    //find opponent card and reposition it under the opponent battle panel
+                    GameObject opponentSelectedCard = NetworkIdentity.spawned[opponentGamePlayer.playerBattleCardNetId].gameObject;
+                    opponentGamePlayer.selectedCard = opponentSelectedCard;
+                    opponentSelectedCard.SetActive(true);
+                    opponentSelectedCard.transform.SetParent(opponentPlayerBattlePanel.transform);
+                    opponentSelectedCard.transform.localPosition = new Vector3(-27f, -110f, 1f);
+                    opponentSelectedCard.transform.localScale = new Vector3(70f, 70f, 1f);
 
-            //update the opponent's score
-            int opponentBattleScore = opponentGamePlayer.playerBattleScore + opponentSelectedCard.GetComponent<Card>().Power;
-            opponentCardPower.GetComponent<Text>().text = opponentBattleScore.ToString();
-            opponentSelectCardText.SetActive(true);
-            opponentCardText.SetActive(true);
-            opponentCardPower.SetActive(true);
+                    //update the opponent's score
+                    int opponentBattleScore = opponentGamePlayer.playerBattleScore + opponentSelectedCard.GetComponent<Card>().Power;
+                    Debug.Log("SetOpponentBattleScoreAndCard: Opponent battle score: " + opponentGamePlayer.playerBattleScore.ToString() + " opponent card score: " + opponentSelectedCard.GetComponent<Card>().Power.ToString() + " for a total of: " + opponentBattleScore.ToString());
+                    opponentCardPower.GetComponent<Text>().text = opponentBattleScore.ToString();
+                    opponentSelectCardText.SetActive(true);
+                    opponentCardText.SetActive(true);
+                    opponentCardPower.SetActive(true);
+                }
+            }
+            
         }
+        else
+        {
+            if (localPlayerBattlePanel && LocalGamePlayerScript.playerBattleCardNetId > 0 && LocalGamePlayerScript.selectedCard)
+            {
+                Debug.Log("SetOpponentBattleScoreAndCard: updating LOCAL PLAYER's battle score");
+                int localPlayerBattleScore = LocalGamePlayerScript.playerBattleScore + LocalGamePlayerScript.selectedCard.GetComponent<Card>().Power;
+                Debug.Log("SetOpponentBattleScoreAndCard: Opponent battle score: " + LocalGamePlayerScript.playerBattleScore.ToString() + " opponent card score: " + LocalGamePlayerScript.selectedCard.GetComponent<Card>().Power.ToString() + " for a total of: " + localPlayerBattleScore.ToString());
+                localCardPower.GetComponent<Text>().text = localPlayerBattleScore.ToString();
+            }            
+        }
+        
         if (isPlayerBaseDefense)
         {
             Debug.Log("SetOpponentBattleScoreAndCard: Battle was a base defense.");
@@ -2504,7 +2539,7 @@ public class GameplayManager : NetworkBehaviour
         }
         if (isClient && newValue != 0)
         {
-            Debug.Log("Current Battle Site net id has been updated.");
+            Debug.Log("HandleReinforcementsBattleSiteUpdate: Current Battle Site net id has been updated.");
             Debug.Log("HandleReinforcementsBattleSiteUpdate: Current game phase is: " + currentGamePhase);
             ZoomOnBattleSite(newValue);
             HideNonBattleUnits(newValue, true);
@@ -2596,15 +2631,49 @@ public class GameplayManager : NetworkBehaviour
         if (isClient && newValue && !localReinforcementsLost)
         {
             Debug.Log("Updating HandleUnitsLostFromRetreat to true");
-            if (!reinforcementsDestroyedTextObject.activeInHierarchy)
-                reinforcementsDestroyedTextObject.SetActive(true);
+            //if (!reinforcementsDestroyedTextObject.activeInHierarchy)
+            reinforcementsDestroyedTextObject.SetActive(true);
             localReinforcementsLost = true;
         }
         else if (!newValue)
         {
-            if (reinforcementsDestroyedTextObject.activeInHierarchy)
-                reinforcementsDestroyedTextObject.SetActive(false);
+            //if (reinforcementsDestroyedTextObject.activeInHierarchy)
+            reinforcementsDestroyedTextObject.SetActive(false);
             localReinforcementsLost = false;
+        }
+    }
+    public void UpdatePlayerBattleScoreInPanel(GamePlayer playerToUpdateScoreFor)
+    {
+        Debug.Log("Executing UpdatePlayerBattleScoreInPanel");
+        if (LocalGamePlayerScript.playerNumber != playerToUpdateScoreFor.playerNumber && LocalGamePlayerScript.PlayerName != playerToUpdateScoreFor.PlayerName)
+        {
+            Debug.Log("UpdatePlayerBattleScoreInPanel: Update player battle score for NOT THE LOCAL PLAYER. Player is: " + playerToUpdateScoreFor.PlayerName);
+            SetOpponentBattleScoreAndCard(true);
+        }
+        else
+        {
+            Debug.Log("UpdatePlayerBattleScoreInPanel: Update player battle score for theLOCAL PLAYER.");
+            SetOpponentBattleScoreAndCard(false);
+        }
+    }
+    public void UpdatePlayerCardAbilityText(GamePlayer playerToUpdateScoreFor)
+    {
+        Debug.Log("Executing UpdatePlayerCardAbilityText");
+        if (LocalGamePlayerScript.playerNumber != playerToUpdateScoreFor.playerNumber && LocalGamePlayerScript.PlayerName != playerToUpdateScoreFor.PlayerName)
+        {
+            Debug.Log("UpdatePlayerCardAbilityText: Update player card ability text for NOT THE LOCAL PLAYER. Player is: " + playerToUpdateScoreFor.PlayerName);
+            if (opponentPlayerBattlePanel)
+            {
+                opponentCardAbilityText.SetActive(true);
+            }
+        }
+        else
+        {
+            Debug.Log("UpdatePlayerCardAbilityText: Update player card ability text for the LOCAL PLAYER.");
+            if (localPlayerBattlePanel)
+            {
+                localCardAbilityText.SetActive(true);
+            }
         }
     }
 }

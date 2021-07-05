@@ -218,6 +218,11 @@ public class PlayerHand : NetworkBehaviour
         {
             RpcMoveCardToDiscard(cardtoDiscardNetId);
         }*/
+        Card cardToDiscard = NetworkIdentity.spawned[cardtoDiscardNetId].gameObject.GetComponent<Card>();
+        if (cardToDiscard.didAbilityActivate)
+        {
+            cardToDiscard.HandleAbilityActivated(cardToDiscard.didAbilityActivate, false);
+        }
         RpcMoveCardToDiscard(cardtoDiscardNetId);
         if (HandNetId.Count == 0)
         {
@@ -244,10 +249,19 @@ public class PlayerHand : NetworkBehaviour
                 DiscardPile.Add(cardToDiscard);
 
             // If the card is not a child of the PlayerCardHand object, set it as a child of the PlayerCardHand object
+            Debug.Log("RpcMoveCardToDiscard: Parent of card to discard is: " + cardToDiscard.transform.parent.name.ToString());
             if (!cardToDiscard.transform.IsChildOf(this.transform))
+            {
+                Debug.Log("RpcMoveCardToDiscard: card to discard is not a child object of the playerhand. Setting card to child of player hand");
                 cardToDiscard.transform.SetParent(this.transform);
+                Debug.Log("RpcMoveCardToDiscard: card to discard parent object is now " + cardToDiscard.transform.parent.name.ToString());
+            }
+
             if (cardToDiscard.activeInHierarchy)
+            {
+                Debug.Log("RpcMoveCardToDiscard: card to discard is active in the hierarchy. Deactivating the card.");
                 cardToDiscard.SetActive(false);
+            }   
             
             if(DiscardPile.Count > 0)
                 DiscardPile = DiscardPile.OrderByDescending(o => o.GetComponent<Card>().Power).ToList();
