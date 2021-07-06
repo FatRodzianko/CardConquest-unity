@@ -1022,7 +1022,7 @@ public class LandScript : NetworkBehaviour
     }
     public void ResetUnitPositionAndUnitTextAfterBattle()
     {
-        Debug.Log("Executing ResetUnitPositionAndUnitTextAfterBattle");
+        Debug.Log("Executing ResetUnitPositionAndUnitTextAfterBattle on land object: " + this.gameObject.name);
         // Clear out old army info since the battle is over
         Player1Inf.Clear();
         Player1Tank.Clear();

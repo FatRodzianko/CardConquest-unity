@@ -109,14 +109,17 @@ MonoBehaviour:
   cardSpecialAbilityText: {fileID: 0}
   AttackIcons: []
   DefenseIcons: []
+  didAbilityActivate: 0
+  localDidAbilityActivate: 0
   ownerPlayerName: 
   ownerConnectionId: 0
   ownerPlayerNumber: 0
+  myPlayerHandObject: {fileID: 0}
   CardName: Power1
   Power: 1
   AttackValue: 1
   DefenseValue: 1
-  SpecialAbilityNumber: 0
+  SpecialAbilityNumber: 3
   currentlySelected: 0
   cardOutlinePrefab: {fileID: 4983412581011409644, guid: 61a1c6067b29d4b4c811064160c681e9,
     type: 3}

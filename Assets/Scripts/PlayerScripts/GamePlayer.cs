@@ -609,7 +609,7 @@ public class GamePlayer : NetworkBehaviour
                 {
                     RpcUpdateIsPlayerBattleScoreSet();
                 }
-
+                CleanupPlayerReinforcementInfo();
                 RpcAdvanceToNextPhase(allPlayersReady, Game.CurrentGamePhase);
                 return;
             }
@@ -1077,7 +1077,14 @@ public class GamePlayer : NetworkBehaviour
                     Debug.Log("DetermineWhoWonBattle: Card Ability 1 for \"If your army has inf but no tanks, +2 battle score\" activated for player: " + player1.PlayerName);
                     //player1.playerBattleScore += 2;
                     player1.HandlePlayerBattleScoreValueSet(player1.playerBattleScore, player1.playerBattleScore += 2);
-                    player1BattleScore +=2;
+                    player1BattleScore += 2;
+                }
+                else if (playerBattleCard.SpecialAbilityNumber == 3 && player1.playerCardAbilityNumber == 3)
+                {
+                    Debug.Log("DetermineWhoWonBattle: Card Ability 3 for \"If opp. reinforced but you did not, +3 battle score\" activated for player: " + player1.PlayerName);
+                    //player1.playerBattleScore += 2;
+                    player1.HandlePlayerBattleScoreValueSet(player1.playerBattleScore, player1.playerBattleScore += 3);
+                    player1BattleScore += 3;
                 }
             }
             if (player2.didPlayerCardAbilityActivate)
@@ -1090,6 +1097,13 @@ public class GamePlayer : NetworkBehaviour
                     //player2.playerBattleScore += 2;
                     player2.HandlePlayerBattleScoreValueSet(player2.playerBattleScore, player2.playerBattleScore += 2);
                     player2BattleScore += 2;
+                }
+                else if (playerBattleCard.SpecialAbilityNumber == 3 && player2.playerCardAbilityNumber == 3)
+                {
+                    Debug.Log("DetermineWhoWonBattle: Card Ability 3 for \"If opp. reinforced but you did not, +3 battle score\" activated for player: " + player2.PlayerName);
+                    //player2.playerBattleScore += 2;
+                    player2.HandlePlayerBattleScoreValueSet(player2.playerBattleScore, player2.playerBattleScore += 3);
+                    player2BattleScore += 3;
                 }
             }
         }
@@ -1640,7 +1654,9 @@ public class GamePlayer : NetworkBehaviour
         {
             //RpcUpdateIsPlayerBattleScoreSet();
         }
-        
+        //CleanupPlayerReinforcementInfo();
+
+
     }
     [Server]
     bool VerifyAllUnitsRetreated()
@@ -1694,7 +1710,7 @@ public class GamePlayer : NetworkBehaviour
         GameplayManager.instance.HandleIsPlayerBaseDefense(GameplayManager.instance.isPlayerBaseDefense, false);
 
         //Cleanup stuff for reinforcements
-        CleanupPlayerReinforcementInfo();
+        //CleanupPlayerReinforcementInfo();
         CleanupGameplayManagerReinforcementInfo();
 
         //Cleanup stuff for card abilities
@@ -2087,7 +2103,8 @@ public class GamePlayer : NetworkBehaviour
                                 if (!unitScript.canUnitReinforce && !unitScript.isUnitReinforcingBattle)
                                 {
                                     Debug.Log("CheckForPossibleReinforcements: Unit has player owner number of: " + unitScript.ownerPlayerNumber.ToString() + " and the battle player number is: " + gamePlayer.playerNumber + ". Unit has not reinforced for a previous battle. Setting unit as a reinforceable unit.");
-                                    unitScript.canUnitReinforce = true;
+                                    unitScript.HandleCanUnitReinforce(unitScript.canUnitReinforce, true);
+                                    
 
                                     if (!gamePlayer.canPlayerReinforce)
                                         gamePlayer.HandleCanPlayerReinforce(gamePlayer.canPlayerReinforce, true);
@@ -2253,7 +2270,9 @@ public class GamePlayer : NetworkBehaviour
                     UnitScript unitChildScript = unitChild.GetComponent<UnitScript>();
                     if (unitChildScript.canUnitReinforce)
                     {
+                        Debug.Log("CleanupPlayerReinforcementInfo: Setting canUnitReinforce to false for unit: " + unitChild.name + " " + unitChild.gameObject.GetComponent<NetworkIdentity>().netId);
                         unitChildScript.HandleCanUnitReinforce(unitChildScript.canUnitReinforce, false);
+                        
                     }
                 }
             }
@@ -2371,6 +2390,29 @@ public class GamePlayer : NetworkBehaviour
                                 else
                                 {
                                     Debug.Log("CheckIfCardPowerActivatesForBattle: DidCardAbility2Activate returned FALSE for player: " + battlePlayer.PlayerName);
+                                }
+                            }
+                        }
+                    }
+                    else if (playerBattleCard.SpecialAbilityNumber == 3)
+                    {
+                        Debug.Log("CheckIfCardPowerActivatesForBattle: found player battle card that has special ability 3 for player: " + playerBattleCard.ownerPlayerName);
+                        foreach (GamePlayer battlePlayer in BattlePlayers)
+                        {
+                            if (battlePlayer.playerNumber == playerBattleCard.ownerPlayerNumber && battlePlayer.ConnectionId == playerBattleCard.ownerConnectionId)
+                            {
+                                if (DidCardAbility3Activate(battlePlayer, BattlePlayers))
+                                {
+                                    Debug.Log("CheckIfCardPowerActivatesForBattle: DidCardAbility3Activate returned true for player: " + battlePlayer.PlayerName);
+                                    //playerNumberAndCardAbility.Add(battlePlayer.playerNumber, 1);
+                                    battlePlayer.HandlePlayerCardAbilityActivated(battlePlayer.didPlayerCardAbilityActivate, true);
+                                    battlePlayer.playerCardAbilityNumber = 3;
+                                    playerBattleCard.HandleAbilityActivated(playerBattleCard.didAbilityActivate, true);
+                                    didPalyerCardAbilityActivate = true;
+                                }
+                                else
+                                {
+                                    Debug.Log("CheckIfCardPowerActivatesForBattle: DidCardAbility3Activate returned FALSE for player: " + battlePlayer.PlayerName);
                                 }
                             }
                         }
@@ -2509,6 +2551,63 @@ public class GamePlayer : NetworkBehaviour
             }
         }
         Debug.Log("DidCardAbility1Activate: Returning: " + didAbilityActivate.ToString() + " for player: " + playerWith2Card.PlayerName);
+        return didAbilityActivate;
+    }
+    [Server]
+    bool DidCardAbility3Activate(GamePlayer playerWith3Card, List<GamePlayer> BattlePlayers)
+    {
+        Debug.Log("Executing DidCardAbility3Activate for player: " + playerWith3Card.PlayerName + " That ability is: \"If opp. reinforced but you did not, +3 battle score\"");
+        bool didAbilityActivate = false;
+
+        //first check to see if the player with the 3 card reinforced. If they did, skip the rest of the checks
+        bool didPlayerwith3CardReinforce = false;
+        if (playerWith3Card.didPlayerReinforce)
+        {
+            Debug.Log("DidCardAbility3Activate: Player: " + playerWith3Card.PlayerName + " reinforced. Skipping rest of checks");
+            didPlayerwith3CardReinforce = true;
+        }
+
+        if (!didPlayerwith3CardReinforce)
+        {
+            Debug.Log("DidCardAbility3Activate: Player: " + playerWith3Card.PlayerName + " did not reinforce. Checking to see if opponent player did reinforce or not to activate the ability");
+            // Get the opponent player object
+            GamePlayer opponentPlayer = null;
+            foreach (GamePlayer battlePlayer in BattlePlayers)
+            {
+                if (battlePlayer.PlayerName == playerWith3Card.PlayerName && battlePlayer.ConnectionId == playerWith3Card.ConnectionId && battlePlayer.playerNumber == playerWith3Card.playerNumber)
+                {
+                    continue;
+                }
+                else
+                {
+                    Debug.Log("DidCardAbility3Activate: found opponent player. Player with card is: " + playerWith3Card.PlayerName + " opponent is: " + battlePlayer.PlayerName);
+                    opponentPlayer = battlePlayer;
+                    break;
+                }
+            }
+            if (opponentPlayer != null)
+            {
+                Debug.Log("DidCardAbility3Activate: opponent player found: " + opponentPlayer.PlayerName);
+                if (opponentPlayer.didPlayerReinforce)
+                {
+                    Debug.Log("DidCardAbility3Activate: opponent player did reinforce value: " + opponentPlayer.didPlayerReinforce.ToString() + " player with card reinforce value: " + playerWith3Card.didPlayerReinforce.ToString());
+                    Debug.Log("DidCardAbility3Activate: opponent player reinforced and player with card did not. Activating the card ability.");
+                    didAbilityActivate = true;
+                    return didAbilityActivate;
+                }
+                else
+                {
+                    Debug.Log("DidCardAbility3Activate: opponent player did reinforce value: " + opponentPlayer.didPlayerReinforce.ToString() + " player with card reinforce value: " + playerWith3Card.didPlayerReinforce.ToString());
+                    Debug.Log("DidCardAbility3Activate: opponent player DID NOT reinforce. Ability will not be activated.");
+                    didAbilityActivate = false;
+                    return didAbilityActivate;
+                }
+            }
+        }
+        else
+            didAbilityActivate = false;
+
+        Debug.Log("DidCardAbility3Activate: Returning: " + didAbilityActivate.ToString() + " for player: " + playerWith3Card.PlayerName);
         return didAbilityActivate;
     }
     [ClientRpc]

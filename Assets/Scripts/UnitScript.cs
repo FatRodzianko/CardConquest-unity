@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
+using System.Linq;
 
 public class UnitScript : NetworkBehaviour
 {
@@ -78,7 +79,7 @@ public class UnitScript : NetworkBehaviour
 
     public void MoveUnit(GameObject LandToMoveTo)
     {
-
+        Debug.Log("Executing MoveUnit for unit: " + this.name + " " + this.GetComponent<NetworkIdentity>().netId.ToString());
         
         Vector3 temp = LandToMoveTo.transform.position;
         if (gameObject.tag == "tank")
@@ -94,10 +95,36 @@ public class UnitScript : NetworkBehaviour
         if (GameplayManager.instance.currentGamePhase == "Unit Placement")
             placedDuringUnitPlacement = true;
         UpdateUnitLandObject(LandToMoveTo);
-        if (GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements") && this.canUnitReinforce && !this.isUnitReinforcingBattle)
+        Debug.Log("Unit name: " + this.name + " " + this.GetComponent<NetworkIdentity>().netId.ToString() + " Can unit reinforce?: " + this.canUnitReinforce.ToString() + " is unit reinforcing a battle?: " + this.isUnitReinforcingBattle.ToString());
+        //if (GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements") && this.canUnitReinforce && !this.isUnitReinforcingBattle)
+        if (GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
         {
+            Debug.Log("MoveUnit: Unit moved during reinforcements. Checking if the units on the land object need to be expanded.");
             if (this.currentLandOccupied)
-                this.currentLandOccupied.GetComponent<LandScript>().ExpandForReinforcements(true);
+            {
+                LandScript currentLandOccupiedScript = this.currentLandOccupied.GetComponent<LandScript>();
+                bool didUnitsAlreadyExpandForReinformcents = false;
+                if (currentLandOccupiedScript.infantryOnLand.Count > 0 && !didUnitsAlreadyExpandForReinformcents)
+                {
+                    if (currentLandOccupiedScript.infantryOnLand.Any(b => b.gameObject.GetComponent<UnitScript>().canUnitReinforce))
+                    {
+                        Debug.Log("MoveUnit: current land occupied for unit has at least 1 infantry that can reinforce. Expanding for reinforcements on: " + this.currentLandOccupied.name);
+                        
+                        this.currentLandOccupied.GetComponent<LandScript>().ExpandForReinforcements(true);
+                        didUnitsAlreadyExpandForReinformcents = true;
+                    }
+                }
+                if (currentLandOccupiedScript.tanksOnLand.Count > 0 && !didUnitsAlreadyExpandForReinformcents)
+                {
+                    if (currentLandOccupiedScript.tanksOnLand.Any(b => b.gameObject.GetComponent<UnitScript>().canUnitReinforce))
+                    {
+                        Debug.Log("MoveUnit: current land occupied for unit has at least 1 tank that can reinforce. Expanding for reinforcements on: " + this.currentLandOccupied.name);
+                        this.currentLandOccupied.GetComponent<LandScript>().ExpandForReinforcements(true);
+                        didUnitsAlreadyExpandForReinformcents = true;
+                    }
+                }
+            }
+                
         }
         
         //LandToMoveTo.GetComponent<LandScript>().RearrangeUnitsAfterTheyAreKilledFromBattle(GameplayManager.instance.loserOfBattlePlayerNumber);
@@ -115,7 +142,7 @@ public class UnitScript : NetworkBehaviour
             {
                 currentLandOccupied = LandToMoveTo;
             }
-            Debug.Log("Unit moved to new land");
+            Debug.Log("Unit moved to new land. This unit is: " + this.gameObject.name);
             if (currentLandOccupied != null)
             {
                 LandScript currentLandOccupiedScript = currentLandOccupied.GetComponent<LandScript>();
@@ -574,11 +601,12 @@ public class UnitScript : NetworkBehaviour
     }
     public void HandleCanUnitReinforce(bool oldValue, bool newValue)
     {
-        Debug.Log("executing HandleCanUnitReinforce");
+        Debug.Log("Executing HandleCanUnitReinforce with value: " + newValue.ToString());
         if (isServer)
             canUnitReinforce = newValue;
         if (isClient && newValue)
         {
+            Debug.Log("HandleCanUnitReinforce: setting canUnitReinforce to true for " + this.name + " " + this.GetComponent<NetworkIdentity>().netId.ToString());
             if (!this.gameObject.activeInHierarchy && GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
                 this.gameObject.SetActive(true);
             if (currentLandOccupied)
@@ -586,6 +614,7 @@ public class UnitScript : NetworkBehaviour
         }
         if (isClient && !newValue)
         {
+            Debug.Log("HandleCanUnitReinforce: setting canUnitReinforce to false for " + this.name + " " + this.GetComponent<NetworkIdentity>().netId.ToString());
             if (this.gameObject.activeInHierarchy && GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
                 this.gameObject.SetActive(false);
         }
