@@ -20,3 +20,5 @@ To get connections to work over LAN, you may need to disable windows firewall. I
 * More than 2 players…
 * Different maps to choose from
 * Camera controls for larger maps or with more players
+
+You can find a much longer how-to-play write up on my itch.io page https://rodzianko.itch.io/cardconquest
