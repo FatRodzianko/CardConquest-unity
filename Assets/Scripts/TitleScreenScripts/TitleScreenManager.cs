@@ -15,6 +15,7 @@ public class TitleScreenManager : MonoBehaviour
     [SerializeField] private GameObject PlayerNamePanel;
     [SerializeField] private GameObject HostOrJoinPanel;
     [SerializeField] private GameObject EnterIPAddressPanel;
+    [SerializeField] private GameObject CommanderSelectionPanel;
 
     [Header("PlayerName UI")]
     [SerializeField] private TMP_InputField playerNameInputField;
@@ -51,6 +52,7 @@ public class TitleScreenManager : MonoBehaviour
         HostOrJoinPanel.SetActive(false);
         EnterIPAddressPanel.SetActive(false);
         returnToMainMenu.gameObject.SetActive(false);
+        CommanderSelectionPanel.SetActive(false);
     }
     public void StartGame()
     {
@@ -70,7 +72,7 @@ public class TitleScreenManager : MonoBehaviour
     public void SavePlayerName()
     {
         string playerName = null;
-        if (!string.IsNullOrEmpty(playerNameInputField.text))
+        if (!string.IsNullOrEmpty(playerNameInputField.text) && playerNameInputField.text.Length < 13)
         {
             playerName = playerNameInputField.text;
             PlayerPrefs.SetString(PlayerPrefsNameKey, playerName);

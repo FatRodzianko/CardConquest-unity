@@ -1,0 +1,64 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2606819635012011277
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2060962858469136734}
+  - component: {fileID: 3239651438200367791}
+  m_Layer: 0
+  m_Name: InfantryCommanderSelectionObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+--- !u!4 &2060962858469136734
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2606819635012011277}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3239651438200367791
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2606819635012011277}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 170a4cb165836b74ba7325a8155c298c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  characterName: Infantry Commander
+  numberOfInfantry: 12
+  numberOfTanks: 4
+  characterCards:
+  - {fileID: 3404837509909957055, guid: d8c7d32a56ba6564c8d9081672b8d024, type: 3}
+  - {fileID: 3404837509909957055, guid: b82bdb86a6c1fa14fb23ae03cebe649d, type: 3}
+  - {fileID: 3404837509909957055, guid: f173d4e3245546a43a2f8a3abd98c7ee, type: 3}
+  - {fileID: 3404837509909957055, guid: 16084f6e5f8df034ea31814387a6dcb7, type: 3}
+  - {fileID: 3404837509909957055, guid: 015790d023fbbd24eb3a927b8cc1bb7f, type: 3}
+  - {fileID: 3404837509909957055, guid: 9fe53722836e50e43902e5ffd641b848, type: 3}
+  - {fileID: 3404837509909957055, guid: d29f572d09493a34a93166f12ce1eba6, type: 3}
+  createdCards:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}

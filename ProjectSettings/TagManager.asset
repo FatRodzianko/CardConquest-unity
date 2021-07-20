@@ -16,6 +16,7 @@ TagManager:
   - LocalGamePlayer
   - Card
   - GamePlayerHandButton
+  - CharacterSelectionManager
   layers:
   - Default
   - TransparentFX

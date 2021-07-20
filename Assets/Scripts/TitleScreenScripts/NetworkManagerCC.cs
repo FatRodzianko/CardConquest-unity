@@ -106,6 +106,7 @@ public class NetworkManagerCC : NetworkManager
                 gamePlayerInstance.SetPlayerName(LobbyPlayers[i].PlayerName);
                 gamePlayerInstance.SetConnectionId(LobbyPlayers[i].ConnectionId);
                 gamePlayerInstance.SetPlayerNumber(LobbyPlayers[i].playerNumber);
+                gamePlayerInstance.SetPlayerNameOfCommander(LobbyPlayers[i].nameOfCommanderSelected);
 
                 NetworkServer.Destroy(conn.identity.gameObject);
                 NetworkServer.ReplacePlayerForConnection(conn, gamePlayerInstance.gameObject, true);

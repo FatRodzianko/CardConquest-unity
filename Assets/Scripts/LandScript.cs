@@ -354,6 +354,13 @@ public class LandScript : NetworkBehaviour
                     temp.y += 0.6f;
                     tanksOnLand[i].transform.position = temp;
                 }
+                else if (i == 4)
+                {
+                    temp = transform.position;
+                    temp.y += 0.5f;
+                    temp.y -= 0.6f;
+                    tanksOnLand[i].transform.position = temp;
+                }
             }
         }
         HideUnitText();
@@ -922,6 +929,12 @@ public class LandScript : NetworkBehaviour
                     temp.x += (0.95f * playerXMultiplier);
                     tanks[i].transform.position = temp;
                 }
+                else if (i == 4)
+                {
+                    temp = tanks[i].transform.position;
+                    temp.y -= 0.6f;
+                    tanks[i].transform.position = temp;
+                }
             }
         }
     }
@@ -1190,6 +1203,13 @@ public class LandScript : NetworkBehaviour
                     temp = transform.position;
                     temp.y += 0.5f;
                     temp.y += 0.6f;
+                    tankCanRetreat[i].transform.position = temp;
+                }
+                else if (i == 4)
+                {
+                    temp = transform.position;
+                    temp.y += 0.5f;
+                    temp.y -= 0.6f;
                     tankCanRetreat[i].transform.position = temp;
                 }
             }

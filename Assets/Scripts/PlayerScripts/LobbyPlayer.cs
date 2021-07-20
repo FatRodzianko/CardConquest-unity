@@ -14,6 +14,8 @@ public class LobbyPlayer : NetworkBehaviour
     [Header("Game Info")]
     public bool IsGameLeader = false;
     [SyncVar(hook = nameof(HandlePlayerReadyStatusUpdate))] public bool IsReady = false;
+    [SyncVar(hook = nameof(HandleIsCommanderSelected))] public bool isCommanderSelected = false;
+    [SyncVar(hook = nameof(HandleNameOfCommanderSelected))] public string nameOfCommanderSelected;
 
     [Header("UI")]
     [SerializeField] private GameObject PlayerLobyUI;
@@ -21,6 +23,17 @@ public class LobbyPlayer : NetworkBehaviour
     [SerializeField] private GameObject Player2ReadyPanel;
     [SerializeField] private GameObject startGameButton;
     [SerializeField] private Button readyButton;
+    [SerializeField] private GameObject changeCommanderButton;
+    [SerializeField] private GameObject player1SelectCommanderButton;
+    [SerializeField] private GameObject player2SelectCommanderButton;
+    [SerializeField] private GameObject player1CommanderText;
+    [SerializeField] private GameObject player2CommanderText;
+    [SerializeField] private GameObject CommanderSelectionPanel;
+
+    [Header("LobbyPlayers")]
+    [SerializeField] private GameObject LocalLobbyPlayer;
+    [SerializeField] private LobbyPlayer LocalLobbyPlayerScript;
+    public bool isLocalPlayerFound = false;
 
     private const string PlayerPrefsNameKey = "PlayerName";
 
@@ -40,7 +53,7 @@ public class LobbyPlayer : NetworkBehaviour
     // Start is called before the first frame update
     void Start()
     {
-
+        GetLocalLobbyPlayer();
     }
 
     // Update is called once per frame
@@ -56,6 +69,7 @@ public class LobbyPlayer : NetworkBehaviour
         Debug.Log("LobbyUI activated for: " + this.PlayerName);
         gameObject.name = "LocalLobbyPlayer";
         Debug.Log("Labeling the local player: " + this.PlayerName);
+        CharacterSelectionManager.instance.FindLocalLobbyPlayer();        
     }
     [Command]
     private void CmdSetPlayerName(string playerName)
@@ -89,7 +103,7 @@ public class LobbyPlayer : NetworkBehaviour
     public void ActivateLobbyUI()
     {
         Debug.Log("Activating lobby UI");
-        if (!PlayerLobyUI.activeInHierarchy)
+        if (!PlayerLobyUI.activeInHierarchy && !CharacterSelectionManager.instance.isPlayerViewCharacterSelection)
             PlayerLobyUI.SetActive(true);
         if (Game.LobbyPlayers.Count() > 0)
         {
@@ -114,6 +128,7 @@ public class LobbyPlayer : NetworkBehaviour
     }
     public void UpdatePlayerReadyText()
     {
+        Debug.Log("UpdatePlayerReadyText");
         if (Player1ReadyPanel.activeInHierarchy && Game.LobbyPlayers.Count() > 0)
         {
             foreach (Transform childText in Player1ReadyPanel.transform)
@@ -134,6 +149,47 @@ public class LobbyPlayer : NetworkBehaviour
                         childText.GetComponent<Text>().color = Color.red;
                     }
                 }
+                if (isLocalPlayerFound)
+                {
+                    if (childText.name == "SelectArmyCommander")
+                    {
+                        if (LocalLobbyPlayerScript.playerNumber == 1)
+                        {
+                            if (!LocalLobbyPlayerScript.isCommanderSelected)
+                            {
+                                childText.gameObject.SetActive(true);
+                                readyButton.gameObject.SetActive(false);
+                                player1CommanderText.SetActive(false);
+                            }
+                            else
+                            {
+                                childText.gameObject.SetActive(false);
+                                readyButton.gameObject.SetActive(true);
+                                player1CommanderText.SetActive(true);
+                                if (!string.IsNullOrEmpty(LocalLobbyPlayerScript.nameOfCommanderSelected))
+                                {
+                                    player1CommanderText.gameObject.GetComponent<Text>().text = LocalLobbyPlayerScript.nameOfCommanderSelected;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            if (Game.LobbyPlayers[0].isCommanderSelected)
+                            {
+                                player1CommanderText.SetActive(true);
+                                if (!string.IsNullOrEmpty(Game.LobbyPlayers[0].nameOfCommanderSelected))
+                                {
+                                    player1CommanderText.gameObject.GetComponent<Text>().text = Game.LobbyPlayers[0].nameOfCommanderSelected;
+                                }
+                            }
+                            else
+                            {
+                                player1CommanderText.SetActive(false);
+                            }
+                        }
+                    }
+                }
+                
             }
         }
         if (Player2ReadyPanel.activeInHierarchy && Game.LobbyPlayers.Count() > 1)
@@ -154,6 +210,47 @@ public class LobbyPlayer : NetworkBehaviour
                     {
                         childText.GetComponent<Text>().text = "Not Ready";
                         childText.GetComponent<Text>().color = Color.red;
+                    }
+                }
+                if (isLocalPlayerFound)
+                {
+                    if (childText.name == "SelectArmyCommander")
+                    {
+                        if (LocalLobbyPlayerScript.playerNumber == 2)
+                        {
+                            if (!LocalLobbyPlayerScript.isCommanderSelected)
+                            {
+                                childText.gameObject.SetActive(true);
+                                readyButton.gameObject.SetActive(false);
+                                player2CommanderText.SetActive(false);
+                            }
+                            else
+                            {
+                                childText.gameObject.SetActive(false);
+                                readyButton.gameObject.SetActive(true);
+                                player2CommanderText.SetActive(true);
+                                if (!string.IsNullOrEmpty(LocalLobbyPlayerScript.nameOfCommanderSelected))
+                                {
+                                    player2CommanderText.gameObject.GetComponent<Text>().text = LocalLobbyPlayerScript.nameOfCommanderSelected;
+                                }
+                            }
+                                
+                        }
+                        else
+                        {
+                            if (Game.LobbyPlayers[1].isCommanderSelected)
+                            {
+                                player2CommanderText.SetActive(true);
+                                if (!string.IsNullOrEmpty(Game.LobbyPlayers[1].nameOfCommanderSelected))
+                                {
+                                    player2CommanderText.gameObject.GetComponent<Text>().text = Game.LobbyPlayers[1].nameOfCommanderSelected;
+                                }
+                            }
+                            else
+                            {
+                                player2CommanderText.SetActive(false);
+                            }
+                        }
                     }
                 }
                 Debug.Log("Updated Player2 Ready panel with player name: " + Game.LobbyPlayers[1].PlayerName + " and ready status: " + Game.LobbyPlayers[1].IsReady);
@@ -242,4 +339,99 @@ public class LobbyPlayer : NetworkBehaviour
             TitleScreenManager.instance.ReturnToMainMenu();
         Debug.Log("LobbyPlayer destroyed. Returning to main menu.");
     }
+    void GetLocalLobbyPlayer()
+    {
+        LocalLobbyPlayer = GameObject.Find("LocalLobbyPlayer");
+        LocalLobbyPlayerScript = LocalLobbyPlayer.GetComponent<LobbyPlayer>();
+        isLocalPlayerFound = true;
+        UpdateLobbyUI();
+    }
+    public void SelectCommanderButtonPressed()
+    {
+        /*Debug.Log("SelectCommander button clicked");
+        if (hasAuthority)
+            CmdSelectCommander();
+        */
+        PlayerLobyUI.SetActive(false);
+        CharacterSelectionManager.instance.ActivateCharacterSelectionUI();
+        //CommanderSelectionPanel.SetActive(true);
+        //UpdateLobbyUI();
+    }
+    [Command]
+    void CmdSelectCommander(string CommanderToSelect, bool isPlayerSelectingCommander)
+    {
+        NetworkIdentity networkIdentity = connectionToClient.identity;
+        LobbyPlayer requestingPlayer = networkIdentity.GetComponent<LobbyPlayer>();
+        Debug.Log("Executing CmdSelectCommander for " + requestingPlayer.PlayerName);
+        Debug.Log("CmdSelectCommander: Commander name is: " + CommanderToSelect + " and player is selecting a commander: " + isPlayerSelectingCommander.ToString());
+        if (isPlayerSelectingCommander)
+        {
+            Debug.Log("CmdSelectCommander: requesting player " + requestingPlayer.PlayerName + " is selecting a commander.");
+            if (!requestingPlayer.isCommanderSelected)
+            {
+                requestingPlayer.HandleIsCommanderSelected(requestingPlayer.isCommanderSelected, true);
+            }
+            requestingPlayer.HandleNameOfCommanderSelected(requestingPlayer.nameOfCommanderSelected, CommanderToSelect);
+        }
+        else
+        {
+            Debug.Log("CmdSelectCommander: requesting player " + requestingPlayer.PlayerName + " is UNselecting a commander.");
+            if (requestingPlayer.isCommanderSelected)
+            {
+                requestingPlayer.HandleIsCommanderSelected(requestingPlayer.isCommanderSelected, false);
+            }
+            requestingPlayer.HandleNameOfCommanderSelected(requestingPlayer.nameOfCommanderSelected, CommanderToSelect);
+        }
+                    
+
+    }
+    public void HandleIsCommanderSelected(bool oldValue, bool newValue)
+    {
+        Debug.Log("HandleIsCommanderSelected: " + newValue.ToString());
+        if (isServer)
+        {
+            this.isCommanderSelected = newValue;
+        }
+        if (isClient)
+        {
+            UpdateLobbyUI();
+            if (hasAuthority && !changeCommanderButton.activeInHierarchy && newValue)
+            {
+                UpdateLobbyUI();
+                changeCommanderButton.SetActive(true);
+            }                
+        }
+    }
+    public void BackToLobby()
+    {
+        //CommanderSelectionPanel.SetActive(false);
+        PlayerLobyUI.SetActive(true);
+        UpdateLobbyUI();
+    }
+    public void SelectCommander(string CommanderToSelect, bool isPlayerSelectingCommander)
+    {
+        if (hasAuthority)
+            CmdSelectCommander(CommanderToSelect, isPlayerSelectingCommander);
+    }
+    public void HandleNameOfCommanderSelected(string oldValue, string newValue)
+    {
+        Debug.Log("HandleNameOfCommanderSelected: " + newValue);
+        if (isServer)
+        {
+            this.nameOfCommanderSelected = newValue;
+        }
+        if (isClient)
+        {
+            UpdateLobbyUI();
+        }
+    }
+    public void ChangeCommanderButton()
+    {
+        if (LocalLobbyPlayerScript.IsReady)
+            CmdReadyUp();
+        SelectCommander("", false);
+        if (changeCommanderButton.activeInHierarchy)
+            changeCommanderButton.SetActive(false);
+    }
+
 }

@@ -84,9 +84,12 @@ public class PlayerHand : NetworkBehaviour
         if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card") || GameplayManager.instance.currentGamePhase.StartsWith("Reinforcements"))
         {
             Vector3 cardLocation = Camera.main.transform.position;
-            cardLocation.x -= 7f;
+            /*cardLocation.x -= 7f;
             cardLocation.z = 0f;
-            Vector3 cardScale = new Vector3(1.5f, 1.5f, 0f);
+            Vector3 cardScale = new Vector3(1.5f, 1.5f, 0f);*/
+            cardLocation.x -= 7.5f;
+            cardLocation.z = 0f;
+            Vector3 cardScale = new Vector3(1.15f, 1.15f, 0f);
             foreach (GameObject playerCard in handOrDiscard)
             {
                 if (!playerCard.activeInHierarchy)
@@ -95,7 +98,8 @@ public class PlayerHand : NetworkBehaviour
                 }
                 playerCard.transform.position = cardLocation;
                 playerCard.transform.localScale = cardScale;
-                cardLocation.x += 3.5f;
+                //cardLocation.x += 3.5f;
+                cardLocation.x += 2.5f;
             }
             if (GameplayManager.instance.currentGamePhase.StartsWith("Choose Card"))
             {
@@ -110,8 +114,10 @@ public class PlayerHand : NetworkBehaviour
         }
         else
         {
-            Vector3 cardLocation = new Vector3(-10f, 1.5f, 0f);
-            Vector3 cardScale = new Vector3(1.75f, 1.75f, 0f);
+            //Vector3 cardLocation = new Vector3(-10f, 1.5f, 0f);
+            //Vector3 cardScale = new Vector3(1.75f, 1.75f, 0f);
+            Vector3 cardLocation = new Vector3(-12f, 1.5f, 0f);
+            Vector3 cardScale = new Vector3(1.6f, 1.6f, 0f);
             foreach (GameObject playerCard in handOrDiscard)
             {
                 if (!playerCard.activeInHierarchy)
@@ -120,7 +126,8 @@ public class PlayerHand : NetworkBehaviour
                 }
                 playerCard.transform.position = cardLocation;
                 playerCard.transform.localScale = cardScale;
-                cardLocation.x += 4.5f;
+                //cardLocation.x += 4.5f;
+                cardLocation.x += 3.5f;
             }
         }
         // Hide land text since it displays over cards

@@ -1,0 +1,57 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &5517133485188974544
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 527394552985402925}
+  - component: {fileID: 8155138557177193021}
+  m_Layer: 0
+  m_Name: TankCommanderSelectionObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &527394552985402925
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5517133485188974544}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8155138557177193021
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5517133485188974544}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 170a4cb165836b74ba7325a8155c298c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  characterName: Tank Commander
+  numberOfInfantry: 8
+  numberOfTanks: 6
+  characterCards:
+  - {fileID: 3404837509909957055, guid: cc5aee152c2dd7d469b0703593d015f4, type: 3}
+  - {fileID: 3404837509909957055, guid: d3f2d4178fe442045b64b9c84b588f8f, type: 3}
+  - {fileID: 3404837509909957055, guid: 4793caaa0d2ecbd4b94ccfe1261f6a37, type: 3}
+  - {fileID: 3404837509909957055, guid: 358a9c2e5d1533145ac489890e694889, type: 3}
+  - {fileID: 3404837509909957055, guid: 6a107fe0f0546734da1886d1dad6d93e, type: 3}
+  - {fileID: 3404837509909957055, guid: 5cc54e99b4f52ba41840cefa4b459844, type: 3}
+  - {fileID: 3404837509909957055, guid: 54771a9358b1c564680b9a3d4959973a, type: 3}
+  createdCards: []

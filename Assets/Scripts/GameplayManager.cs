@@ -266,6 +266,11 @@ public class GameplayManager : NetworkBehaviour
                         Vector3 temp = new Vector3(-14.25f, 7.25f, 0f);
                         infToPlace[i].transform.position = temp;
                     }
+                    else if (i == 8)
+                    {
+                        Vector3 temp = new Vector3(-14.25f, 6.25f, 0f);
+                        infToPlace[i].transform.position = temp;
+                    }
                     else
                     {
                         int previousInf = i - 1;
