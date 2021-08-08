@@ -46,7 +46,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sceneId: 0
   serverOnly: 0
-  m_AssetId: 
+  visible: 0
+  m_AssetId: a99f139eb1b07f24fb01761ef7e3dfb2
   hasSpawned: 0
 --- !u!114 &1405991605887148744
 MonoBehaviour:
@@ -65,9 +66,12 @@ MonoBehaviour:
   PlayerName: 
   ConnectionId: 0
   playerNumber: 0
+  nameOfCommander: 
   Player1UnitHolder: {fileID: 4684539146345550748, guid: 7d861bdf29ff83940bdbdd0951ace4c3,
     type: 3}
   Player2UnitHolder: {fileID: 5043476541779447332, guid: c48524fc9158bca48a6d313a77db9f8b,
+    type: 3}
+  playerUnitHolderPrefab: {fileID: 4684539146345550748, guid: 645fbda73b7484c44bc2d2f9e43a3e35,
     type: 3}
   Player1Inf: {fileID: 7863789870599421644, guid: d49fdc38eea384e4f91bd65e574aa387,
     type: 3}
@@ -104,6 +108,8 @@ MonoBehaviour:
   playerArmyReinforcementPower: 0
   playerBattleScore: 0
   isPlayerBattleScoreSet: 0
+  didPlayerCardAbilityActivate: 0
+  playerCardAbilityNumber: 0
   playerBattleCardNetId: 0
   selectedCard: {fileID: 0}
   doesPlayerNeedToRetreat: 0

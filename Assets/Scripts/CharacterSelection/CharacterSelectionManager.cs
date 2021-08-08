@@ -26,6 +26,8 @@ public class CharacterSelectionManager : NetworkBehaviour
     [SerializeField] Text CommanderInfantryText;
     [SerializeField] Text CommanderTankText;
     [SerializeField] GameObject ButtonHolderObject;
+    [SerializeField] GameObject FindLobbiesPanel;
+
     // Start is called before the first frame update
 
     private void Awake()
@@ -41,6 +43,7 @@ public class CharacterSelectionManager : NetworkBehaviour
 
         DontDestroyOnLoad(this.gameObject);*/
     }
+
     void Start()
     {
         
@@ -70,13 +73,15 @@ public class CharacterSelectionManager : NetworkBehaviour
     {
         isPlayerViewCharacterSelection = true;
         CommanderSelectionPanel.SetActive(true);
+        FindLobbiesPanel.SetActive(false);
         DisplayCommander();
     }
     public void BackToLobby()
     {
         isPlayerViewCharacterSelection = false;
         CommanderSelectionPanel.SetActive(false);
-        LocalLobbyPlayerScript.BackToLobby();
+        FindLobbiesPanel.SetActive(true);
+        //LocalLobbyPlayerScript.BackToLobby();
     }
     public void NextCommander()
     {

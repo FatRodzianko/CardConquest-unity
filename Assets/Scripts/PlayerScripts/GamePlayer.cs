@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Mirror;
 using System.Linq;
-
+using Steamworks;
 public class GamePlayer : NetworkBehaviour
 {
     [Header("Player Info")]
@@ -12,6 +12,7 @@ public class GamePlayer : NetworkBehaviour
     [SyncVar] public int ConnectionId;
     [SyncVar] public int playerNumber;
     [SyncVar] public string nameOfCommander;
+    public ulong currentLobbyId;
 
     [Header("Player Unit Prefabs")]
     [SerializeField] GameObject Player1UnitHolder;
@@ -89,12 +90,15 @@ public class GamePlayer : NetworkBehaviour
     }
     public override void OnStartAuthority()
     {
+        Debug.Log("OnStartAuthority for: " + this.PlayerName);
         gameObject.name = "LocalGamePlayer";
         gameObject.tag = "LocalGamePlayer";
-        Debug.Log("Labeling the local player: " + this.PlayerName);
+        Debug.Log("Labeling the local player: " + this.PlayerName + " " + this.name) ;
+        currentLobbyId = SteamLobby.instance.current_lobbyID;
     }
     public override void OnStartClient()
     {
+        Debug.Log("OnStartClient for: " + this.PlayerName);
         DontDestroyOnLoad(gameObject);
         Game.GamePlayers.Add(this);
         Debug.Log("Added to GamePlayer list: " + this.PlayerName);
@@ -174,6 +178,7 @@ public class GamePlayer : NetworkBehaviour
         GamePlayer requestingPlayer = networkIdentity.GetComponent<GamePlayer>();
         if (requestingPlayer.playerNumber == 1 && !requestingPlayer.HaveSpawnedUnits)
         {
+            Debug.Log("CmdSpawnPlayerUnits: Spawning player 1 units.");
             //Instantiate the unit holder
             GameObject playerUnitHolder = Instantiate(Player1UnitHolder, transform.position, Quaternion.identity);
             //Get the unit holder's script to set the owner variables
@@ -230,6 +235,7 @@ public class GamePlayer : NetworkBehaviour
         }
         else if (requestingPlayer.playerNumber == 2 && !requestingPlayer.HaveSpawnedUnits)
         {
+            Debug.Log("CmdSpawnPlayerUnits: Spawning player 2 units.");
             GameObject playerUnitHolder = Instantiate(Player2UnitHolder, transform.position, Quaternion.identity);
             PlayerUnitHolder script = playerUnitHolder.GetComponent<PlayerUnitHolder>();
             script.ownerPlayerName = requestingPlayer.PlayerName;
@@ -2114,12 +2120,12 @@ public class GamePlayer : NetworkBehaviour
             if (isServer)
             {
                 Game.StopHost();
-                Game.HostShutDownServer();
+                //Game.HostShutDownServer();
             }
             else
             {
                 Game.StopClient();
-                Game.HostShutDownServer();
+                //Game.HostShutDownServer();
             }
         }
     }
@@ -2167,6 +2173,7 @@ public class GamePlayer : NetworkBehaviour
         }
 
         //If there are any lands to reinforce from, check which players can reinforce
+        Debug.Log("CheckForPossibleReinforcements: this many lands to reinforce from: " + landsToReinforceFrom.Count.ToString());
         if (landsToReinforceFrom.Count > 0)
         {
             //Get a list of all players involved in the battle
@@ -2176,7 +2183,11 @@ public class GamePlayer : NetworkBehaviour
             {
                 bool isPlayerNumberInList = battlePlayerNumbers.Contains(battleUnitPlayer.Value);
                 if (!isPlayerNumberInList)
+                {
+                    Debug.Log("CheckForPossibleReinforcements: Adding this player number to the battlePlayerNumbers list: " + battleUnitPlayer.Value.ToString());
                     battlePlayerNumbers.Add(battleUnitPlayer.Value);
+                }
+                    
             }
 
             if (battlePlayerNumbers.Count > 0)
@@ -2184,11 +2195,20 @@ public class GamePlayer : NetworkBehaviour
                 foreach (GamePlayer gamePlayer in Game.GamePlayers)
                 {
                     if (battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                    {
+                        Debug.Log("CheckForPossibleReinforcements: add player to battle players because they are in the battle players list: " + gamePlayer.PlayerName);
                         battlePlayers.Add(gamePlayer);
+                    }
+                        
                     else if (battleSite.transform.position == gamePlayer.myPlayerBasePosition)
                     {
                         if (!battlePlayerNumbers.Contains(gamePlayer.playerNumber))
+                        {
+                            Debug.Log("CheckForPossibleReinforcements: add player to battle players because they WERE NOT in the battle players list but this is their base: " + gamePlayer.PlayerName);
                             battlePlayers.Add(gamePlayer);
+                            battlePlayerNumbers.Add(gamePlayer.playerNumber);
+                        }
+                            
                     }
                 }
             }
@@ -2220,11 +2240,11 @@ public class GamePlayer : NetworkBehaviour
                                 {
                                     Debug.Log("CheckForPossibleReinforcements: Unit has player owner number of: " + unitScript.ownerPlayerNumber.ToString() + " and the battle player number is: " + gamePlayer.playerNumber + ". Unit has not reinforced for a previous battle. Setting unit as a reinforceable unit.");
                                     unitScript.HandleCanUnitReinforce(unitScript.canUnitReinforce, true);
-                                    
+
 
                                     if (!gamePlayer.canPlayerReinforce)
                                         gamePlayer.HandleCanPlayerReinforce(gamePlayer.canPlayerReinforce, true);
-                                        
+
                                     if (!canPlayersReinforce)
                                         canPlayersReinforce = true;
 
@@ -2242,12 +2262,17 @@ public class GamePlayer : NetworkBehaviour
                                 }
                                 break;
                             }
-                            
+
                         }
+                    }
+                    else
+                    {
+                        Debug.Log("CheckForPossibleReinforcements: Found unit on land for player number: " + unit.Value.ToString() + " on land object: " + landScript.gameObject);
                     }
                 }
             }
         }
+        Debug.Log("CheckForPossibleReinforcements: returning: " + canPlayersReinforce.ToString());
         return canPlayersReinforce;
     }
     void HandleCanPlayerReinforce(bool oldValue, bool newValue)
@@ -3241,6 +3266,12 @@ public class GamePlayer : NetworkBehaviour
         Debug.Log("GetNumberOfInfantryInArmyAndReinforcements: " + playerToCheck.PlayerName + " had this many reinforcements in army + reinforcements to return: " + numberOfInfAndReinforcements.ToString());
         return numberOfInfAndReinforcements;
     }
-
+    private void OnDestroy()
+    {
+        if (hasAuthority)
+        {
+            SteamMatchmaking.LeaveLobby((CSteamID)currentLobbyId);
+        }
+    }
 }
 

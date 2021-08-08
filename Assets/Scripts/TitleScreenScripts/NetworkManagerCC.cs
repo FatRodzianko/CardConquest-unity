@@ -49,7 +49,11 @@ public class NetworkManagerCC : NetworkManager
             conn.Disconnect();
             return;
         }
-        if (SceneManager.GetActiveScene().name != "TitleScreen") // prevents players from joining a game that has already started. When the game starts, the scene will no longer be the "TitleScreen"
+        if (SceneManager.GetActiveScene().name == "TitleScreen" || SceneManager.GetActiveScene().name == "LobbyScene") // prevents players from joining a game that has already started. When the game starts, the scene will no longer be the "TitleScreen"
+        {
+            Debug.Log("Player loaded from scene: " + SceneManager.GetActiveScene().name);            
+        }
+        else
         {
             Debug.Log("Player did not load from correct scene. Disconnecting user. Player loaded from scene: " + SceneManager.GetActiveScene().name);
             conn.Disconnect();
@@ -60,7 +64,7 @@ public class NetworkManagerCC : NetworkManager
     public override void OnServerAddPlayer(NetworkConnection conn)
     {
         Debug.Log("Checking if player is in correct scene. Player's scene name is: " + SceneManager.GetActiveScene().name.ToString() + ". Correct scene name is: TitleScreen");
-        if (SceneManager.GetActiveScene().name == "TitleScreen")
+        if (SceneManager.GetActiveScene().name == "TitleScreen" || SceneManager.GetActiveScene().name == "LobbyScene")
         {
             bool isGameLeader = LobbyPlayers.Count == 0; // isLeader is true if the player count is 0, aka when you are the first player to be added to a server/room
 
@@ -76,7 +80,7 @@ public class NetworkManagerCC : NetworkManager
     }
     public void StartGame()
     {
-        if (CanStartGame() && SceneManager.GetActiveScene().name == "TitleScreen")
+        if (CanStartGame() && SceneManager.GetActiveScene().name == "LobbyScene")
         {
             ServerChangeScene("Gameplay");
         }
@@ -84,18 +88,24 @@ public class NetworkManagerCC : NetworkManager
     private bool CanStartGame()
     {
         if (numPlayers < minPlayers)
+        {
+            Debug.Log("CanStartGame: Not enough players to start the game");
             return false;
+        }            
         foreach (LobbyPlayer player in LobbyPlayers)
         {
-            if (!player.IsReady)
+            if (!player.isPlayerReady)
+                return false;
+            if (!player.isCommanderSelected)
                 return false;
         }
         return true;
     }
     public override void ServerChangeScene(string newSceneName)
     {
+        Debug.Log("ServerChangeScene: Changing to the following scene: " + newSceneName);
         //Changing from the menu to the scene
-        if (SceneManager.GetActiveScene().name == "TitleScreen" && newSceneName == "Gameplay")
+        if ((SceneManager.GetActiveScene().name == "TitleScreen" || SceneManager.GetActiveScene().name == "LobbyScene") && newSceneName == "Gameplay")
         {
             Debug.Log("Changing scene to: " + newSceneName);
             for (int i = LobbyPlayers.Count - 1; i >= 0; i--)
@@ -134,9 +144,10 @@ public class NetworkManagerCC : NetworkManager
     public void HostShutDownServer()
     {
         GameObject NetworkManagerObject = GameObject.Find("NetworkManager");
+        Destroy(this.GetComponent<SteamManager>());
         Destroy(NetworkManagerObject);
         Shutdown();
-        //SceneManager.LoadScene("empty");
+        SceneManager.LoadScene("TitleScreen");
         
         Start();
 

@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
+using WhereAllocation;
 
 namespace kcp2k
 {
@@ -13,12 +14,6 @@ namespace kcp2k
         public Action<int> OnConnected;
         public Action<int, ArraySegment<byte>> OnData;
         public Action<int> OnDisconnected;
-
-        // Mirror needs a way to stop kcp message processing while loop
-        // immediately after a scene change message. Mirror can't process any
-        // other messages during a scene change.
-        // (could be useful for others too)
-        public Func<bool> OnCheckEnabled = () => true;
 
         // configuration
         // NoDelay is recommended to reduce latency. This also scales better
@@ -42,14 +37,24 @@ namespace kcp2k
         //  8192, 8192 for 20k monsters
         public uint SendWindowSize;
         public uint ReceiveWindowSize;
+        // timeout in milliseconds
+        public int Timeout;
 
         // state
         Socket socket;
-        EndPoint newClientEP = new IPEndPoint(IPAddress.IPv6Any, 0);
+#if UNITY_SWITCH
+        // switch does not support ipv6
+        //EndPoint newClientEP = new IPEndPoint(IPAddress.Any, 0);
+        IPEndPointNonAlloc reusableClientEP = new IPEndPointNonAlloc(IPAddress.Any, 0); // where-allocation
+#else
+        //EndPoint newClientEP = new IPEndPoint(IPAddress.IPv6Any, 0);
+        IPEndPointNonAlloc reusableClientEP = new IPEndPointNonAlloc(IPAddress.IPv6Any, 0); // where-allocation
+#endif
         // IMPORTANT: raw receive buffer always needs to be of 'MTU' size, even
         //            if MaxMessageSize is larger. kcp always sends in MTU
         //            segments and having a buffer smaller than MTU would
         //            silently drop excess data.
+        //            => we need the mtu to fit channel + message!
         readonly byte[] rawReceiveBuffer = new byte[Kcp.MTU_DEF];
 
         // connections <connectionId, connection> where connectionId is EndPoint.GetHashCode
@@ -63,7 +68,8 @@ namespace kcp2k
                          int FastResend = 0,
                          bool CongestionWindow = true,
                          uint SendWindowSize = Kcp.WND_SND,
-                         uint ReceiveWindowSize = Kcp.WND_RCV)
+                         uint ReceiveWindowSize = Kcp.WND_RCV,
+                         int Timeout = KcpConnection.DEFAULT_TIMEOUT)
         {
             this.OnConnected = OnConnected;
             this.OnData = OnData;
@@ -74,6 +80,7 @@ namespace kcp2k
             this.CongestionWindow = CongestionWindow;
             this.SendWindowSize = SendWindowSize;
             this.ReceiveWindowSize = ReceiveWindowSize;
+            this.Timeout = Timeout;
         }
 
         public bool IsActive() => socket != null;
@@ -87,18 +94,25 @@ namespace kcp2k
             }
 
             // listen
+#if UNITY_SWITCH
+            // Switch does not support ipv6
+            socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Bind(new IPEndPoint(IPAddress.Any, port));
+#else
             socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
             socket.DualMode = true;
             socket.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+#endif
         }
 
-        public void Send(int connectionId, ArraySegment<byte> segment)
+        public void Send(int connectionId, ArraySegment<byte> segment, KcpChannel channel)
         {
             if (connections.TryGetValue(connectionId, out KcpServerConnection connection))
             {
-                connection.Send(segment);
+                connection.SendData(segment, channel);
             }
         }
+
         public void Disconnect(int connectionId)
         {
             if (connections.TryGetValue(connectionId, out KcpServerConnection connection))
@@ -116,18 +130,39 @@ namespace kcp2k
             return "";
         }
 
+        // process incoming messages. should be called before updating the world.
         HashSet<int> connectionsToRemove = new HashSet<int>();
-        public void Tick()
+        public void TickIncoming()
         {
             while (socket != null && socket.Poll(0, SelectMode.SelectRead))
             {
                 try
                 {
-                    int msgLength = socket.ReceiveFrom(rawReceiveBuffer, 0, rawReceiveBuffer.Length, SocketFlags.None, ref newClientEP);
+                    // NOTE: ReceiveFrom allocates.
+                    //   we pass our IPEndPoint to ReceiveFrom.
+                    //   receive from calls newClientEP.Create(socketAddr).
+                    //   IPEndPoint.Create always returns a new IPEndPoint.
+                    //   https://github.com/mono/mono/blob/f74eed4b09790a0929889ad7fc2cf96c9b6e3757/mcs/class/System/System.Net.Sockets/Socket.cs#L1761
+                    //int msgLength = socket.ReceiveFrom(rawReceiveBuffer, 0, rawReceiveBuffer.Length, SocketFlags.None, ref newClientEP);
                     //Log.Info($"KCP: server raw recv {msgLength} bytes = {BitConverter.ToString(buffer, 0, msgLength)}");
 
+                    // where-allocation nonalloc ReceiveFrom.
+                    int msgLength = socket.ReceiveFrom_NonAlloc(rawReceiveBuffer, 0, rawReceiveBuffer.Length, SocketFlags.None, reusableClientEP);
+                    SocketAddress remoteAddress = reusableClientEP.temp;
+
                     // calculate connectionId from endpoint
-                    int connectionId = newClientEP.GetHashCode();
+                    // NOTE: IPEndPoint.GetHashCode() allocates.
+                    //  it calls m_Address.GetHashCode().
+                    //  m_Address is an IPAddress.
+                    //  GetHashCode() allocates for IPv6:
+                    //  https://github.com/mono/mono/blob/bdd772531d379b4e78593587d15113c37edd4a64/mcs/class/referencesource/System/net/System/Net/IPAddress.cs#L699
+                    //
+                    // => using only newClientEP.Port wouldn't work, because
+                    //    different connections can have the same port.
+                    //int connectionId = newClientEP.GetHashCode();
+
+                    // where-allocation nonalloc GetHashCode
+                    int connectionId = remoteAddress.GetHashCode();
 
                     // IMPORTANT: detect if buffer was too small for the received
                     //            msgLength. otherwise the excess data would be
@@ -138,8 +173,19 @@ namespace kcp2k
                         // is this a new connection?
                         if (!connections.TryGetValue(connectionId, out KcpServerConnection connection))
                         {
+                            // IPEndPointNonAlloc is reused all the time.
+                            // we can't store that as the connection's endpoint.
+                            // we need a new copy!
+                            IPEndPoint newClientEP = reusableClientEP.DeepCopyIPEndPoint();
+
+                            // for allocation free sending, we also need another
+                            // IPEndPointNonAlloc...
+                            IPEndPointNonAlloc reusableSendEP = new IPEndPointNonAlloc(newClientEP.Address, newClientEP.Port);
+
                             // create a new KcpConnection
-                            connection = new KcpServerConnection(socket, newClientEP, NoDelay, Interval, FastResend, CongestionWindow, SendWindowSize, ReceiveWindowSize);
+                            // -> where-allocation IPEndPointNonAlloc is reused.
+                            //    need to create a new one from the temp address.
+                            connection = new KcpServerConnection(socket, newClientEP, reusableSendEP, NoDelay, Interval, FastResend, CongestionWindow, SendWindowSize, ReceiveWindowSize, Timeout);
 
                             // DO NOT add to connections yet. only if the first message
                             // is actually the kcp handshake. otherwise it's either:
@@ -203,16 +249,12 @@ namespace kcp2k
                                 OnConnected.Invoke(connectionId);
                             };
 
-                            // setup OnCheckEnabled to safely support Mirror
-                            // scene changes (see comments in Awake() above)
-                            connection.OnCheckEnabled = OnCheckEnabled;
-
-                            // now input the message & tick
+                            // now input the message & process received ones
                             // connected event was set up.
                             // tick will process the first message and adds the
                             // connection if it was the handshake.
                             connection.RawInput(rawReceiveBuffer, msgLength);
-                            connection.Tick();
+                            connection.TickIncoming();
 
                             // again, do not add to connections.
                             // if the first message wasn't the kcp handshake then
@@ -234,10 +276,11 @@ namespace kcp2k
                 catch (SocketException) {}
             }
 
-            // tick all server connections
+            // process inputs for all server connections
+            // (even if we didn't receive anything. need to tick ping etc.)
             foreach (KcpServerConnection connection in connections.Values)
             {
-                connection.Tick();
+                connection.TickIncoming();
             }
 
             // remove disconnected connections
@@ -250,10 +293,43 @@ namespace kcp2k
             connectionsToRemove.Clear();
         }
 
+        // process outgoing messages. should be called after updating the world.
+        public void TickOutgoing()
+        {
+            // flush all server connections
+            foreach (KcpServerConnection connection in connections.Values)
+            {
+                connection.TickOutgoing();
+            }
+        }
+
+        // process incoming and outgoing for convenience.
+        // => ideally call ProcessIncoming() before updating the world and
+        //    ProcessOutgoing() after updating the world for minimum latency
+        public void Tick()
+        {
+            TickIncoming();
+            TickOutgoing();
+        }
+
         public void Stop()
         {
             socket?.Close();
             socket = null;
+        }
+
+        // pause/unpause to safely support mirror scene handling and to
+        // immediately pause the receive while loop if needed.
+        public void Pause()
+        {
+            foreach (KcpServerConnection connection in connections.Values)
+                connection.Pause();
+        }
+
+        public void Unpause()
+        {
+            foreach (KcpServerConnection connection in connections.Values)
+                connection.Unpause();
         }
     }
 }

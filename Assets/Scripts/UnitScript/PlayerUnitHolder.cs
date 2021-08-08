@@ -19,14 +19,4 @@ public class PlayerUnitHolder : NetworkBehaviour
     {
         
     }
-    public void RunCmdTest()
-    {
-        Debug.Log("Running CmdTest");
-        CmdTest();
-    }
-    [Command]
-    public void CmdTest()
-    {
-        Debug.Log("Test successful");
-    }
 }

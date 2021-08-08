@@ -194,8 +194,7 @@ public class Card : NetworkBehaviour
             }
             else
             {
-                if (cardAttTextHolder.activeInHierarchy)
-                    cardAttTextHolder.SetActive(false);
+                cardAttTextHolder.SetActive(false);
                 for (int i = 0; i < AttackValue; i++)
                 {
                     Debug.Log("SpawnAttackDefenseIcons: Spawning attack icon number: " + i.ToString());

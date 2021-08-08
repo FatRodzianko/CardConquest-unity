@@ -24,14 +24,21 @@ public class MouseClickManager : MonoBehaviour
     public bool canSelectUnitsInThisPhase = false;
     public bool canSelectPlayerCardsInThisPhase = false;
 
+    private void Awake()
+    {
+        Debug.Log("Awake MouseClickManager.cs");
+        MakeInstance();
+    }
     void Start()
     {
-        MakeInstance();
+        Debug.Log("Start MouseClickManager.cs");
+        
         unitsSelected = new List<GameObject>();
         GetLocalGamePlayer();
     }
     void MakeInstance()
     {
+        Debug.Log("MakeInstance MouseClickManager");
         if (instance == null)
             instance = this;
     }
@@ -269,6 +276,7 @@ public class MouseClickManager : MonoBehaviour
     [Client]
     void GetLocalGamePlayer()
     {
+        Debug.Log("GetLocalGamePlayer: MouseClickManager");
         LocalGamePlayer = GameObject.Find("LocalGamePlayer");
         LocalGamePlayerScript = LocalGamePlayer.GetComponent<GamePlayer>();
     }

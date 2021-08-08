@@ -12,8 +12,8 @@ public class GameplayManager : NetworkBehaviour
     public static GameplayManager instance;
     public string currentGamePhase;
 
-    private List<GameObject> infToPlace;
-    private List<GameObject> tanksToPlace;
+    private List<GameObject> infToPlace = new List<GameObject>();
+    private List<GameObject> tanksToPlace = new List<GameObject>();
 
     [Header("UI Stuff")]
     [SerializeField]
@@ -149,8 +149,6 @@ public class GameplayManager : NetworkBehaviour
     {
         MakeInstance();
         Debug.Log("GameplayManager exists.");
-        infToPlace = new List<GameObject>();
-        tanksToPlace = new List<GameObject>();
 
         /*currentGamePhase = "Unit Placement";
         SetGamePhaseText();
@@ -166,7 +164,7 @@ public class GameplayManager : NetworkBehaviour
         //currentGamePhase = "Unit Placement";
         //SetGamePhaseText();
         //ActivateUnitPlacementUI();
-
+        Debug.Log("Start in GameplayManager.cs");
         GetLocalGamePlayer();
         GetCurrentGamePhase();
         SpawnPlayerUnits();
@@ -183,6 +181,7 @@ public class GameplayManager : NetworkBehaviour
     }
     void MakeInstance()
     {
+        Debug.Log("GameplayManager MakeInstance.");
         if (instance == null)
             instance = this;
     }
@@ -664,6 +663,7 @@ public class GameplayManager : NetworkBehaviour
     }
     void GetLocalGamePlayer()
     {
+        Debug.Log("GetLocalGamePlayer: Trying to find local game player");
         LocalGamePlayer = GameObject.Find("LocalGamePlayer");
         LocalGamePlayerScript = LocalGamePlayer.GetComponent<GamePlayer>();
     }
@@ -2380,7 +2380,7 @@ public class GameplayManager : NetworkBehaviour
         if (!isServer && isLoser)
         {
             //NetworkClient.Disconnect();
-            LocalGamePlayerScript.QuitGame();
+            //LocalGamePlayerScript.QuitGame();
         }   
         else if (isServer && isLoser)
             LocalGamePlayerScript.HostLostGame();

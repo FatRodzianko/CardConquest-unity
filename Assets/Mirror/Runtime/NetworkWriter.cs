@@ -2,30 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
-using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 
 namespace Mirror
 {
-    /// <summary>
-    /// A class that holds writers for the different types
-    /// <para>Note that c# creates a different static variable for each type</para>
-    /// <para>This will be populated by the weaver</para>
-    /// </summary>
-    /// <typeparam name="T"></typeparam>
+    /// <summary>Helper class that weaver populates with all writer types.</summary>
+    // Note that c# creates a different static variable for each type
+    // -> Weaver.ReaderWriterProcessor.InitializeReaderAndWriters() populates it
     public static class Writer<T>
     {
         public static Action<NetworkWriter, T> write;
     }
 
-    /// <summary>
-    /// Binary stream Writer. Supports simple types, buffers, arrays, structs, and nested types
-    /// <para>Use <see cref="NetworkWriterPool.GetWriter">NetworkWriter.GetWriter</see> to reduce memory allocation</para>
-    /// </summary>
+    /// <summary>Network Writer for most simple types like floats, ints, buffers, structs, etc. Use NetworkWriterPool.GetReader() to avoid allocations.</summary>
     public class NetworkWriter
     {
-        static readonly ILogger logger = LogFactory.GetLogger<NetworkWriter>();
-
         public const int MaxStringLength = 1024 * 32;
 
         // create writer immediately with it's own buffer so no one can mess with it and so that we can resize it.
@@ -33,73 +24,15 @@ namespace Mirror
         // => 1500 bytes by default because on average, most packets will be <= MTU
         byte[] buffer = new byte[1500];
 
-        // 'int' is the best type for .Position. 'short' is too small if we send >32kb which would result in negative .Position
-        // -> converting long to int is fine until 2GB of data (MAX_INT), so we don't have to worry about overflows here
-        int position;
-        int length;
+        /// <summary>Next position to write to the buffer</summary>
+        public int Position;
 
-        /// <summary>
-        /// Number of bytes writen to the buffer
-        /// </summary>
-        public int Length => length;
-
-        /// <summary>
-        /// Next position to write to the buffer
-        /// </summary>
-        public int Position
-        {
-            get => position;
-            set
-            {
-                position = value;
-                EnsureLength(value);
-            }
-        }
-
-        /// <summary>
-        /// Reset both the position and length of the stream
-        /// </summary>
-        /// <remarks>
-        /// Leaves the capacity the same so that we can reuse this writer without extra allocations
-        /// </remarks>
+        /// <summary>Reset both the position and length of the stream</summary>
+        // Leaves the capacity the same so that we can reuse this writer without
+        // extra allocations
         public void Reset()
         {
-            position = 0;
-            length = 0;
-        }
-
-        /// <summary>
-        /// Sets length, moves position if it is greater than new length
-        /// </summary>
-        /// <param name="newLength"></param>
-        /// <remarks>
-        /// Zeros out any extra length created by setlength
-        /// </remarks>
-        public void SetLength(int newLength)
-        {
-            int oldLength = length;
-
-            // ensure length & capacity
-            EnsureLength(newLength);
-
-            // zero out new length
-            if (oldLength < newLength)
-            {
-                Array.Clear(buffer, oldLength, newLength - oldLength);
-            }
-
-            length = newLength;
-            position = Mathf.Min(position, length);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        void EnsureLength(int value)
-        {
-            if (length < value)
-            {
-                length = value;
-                EnsureCapacity(value);
-            }
+            Position = 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -112,130 +45,42 @@ namespace Mirror
             }
         }
 
-        /// <summary>
-        /// Copys buffer to new array with the size of <see cref="Length"/>
-        /// <para></para>
-        /// </summary>
-        /// <returns>all the data we have written, regardless of the current position</returns>
+        /// <summary>Copies buffer until 'Position' to a new array.</summary>
         public byte[] ToArray()
         {
-            byte[] data = new byte[length];
-            Array.ConstrainedCopy(buffer, 0, data, 0, length);
+            byte[] data = new byte[Position];
+            Array.ConstrainedCopy(buffer, 0, data, 0, Position);
             return data;
         }
 
-        /// <summary>
-        /// Create an ArraySegment using the buffer and <see cref="Length"/>
-        /// <para>
-        ///     Dont modify the NetworkWriter while using the ArraySegment as this can overwrite the bytes
-        /// </para>
-        /// <para>
-        ///     Use ToArraySegment instead of ToArray to avoid allocations
-        /// </para>
-        /// </summary>
-        /// <returns>all the data we have written, regardless of the current position</returns>
+        /// <summary>Returns allocation-free ArraySegment until 'Position'.</summary>
         public ArraySegment<byte> ToArraySegment()
         {
-            return new ArraySegment<byte>(buffer, 0, length);
+            return new ArraySegment<byte>(buffer, 0, Position);
         }
 
-        // WriteBlittable<T> from DOTSNET.
-        // Benchmark:
-        //   WriteQuaternion x 100k, Macbook Pro 2015 @ 2.2Ghz, Unity 2018 LTS (debug mode)
-        //
-        //                | Median |  Min  |  Max  |  Avg  |  Std  | (ms)
-        //     before     |  30.35 | 29.86 | 48.99 | 32.54 |  4.93 |
-        //     blittable* |   5.69 |  5.52 | 27.51 |  7.78 |  5.65 |
-        //
-        //     * without IsBlittable check
-        //     => 4-6x faster!
-        //
-        //   WriteQuaternion x 100k, Macbook Pro 2015 @ 2.2Ghz, Unity 2020.1 (release mode)
-        //
-        //                | Median |  Min  |  Max  |  Avg  |  Std  | (ms)
-        //     before     |   9.41 |  8.90 | 23.02 | 10.72 |  3.07 |
-        //     blittable* |   1.48 |  1.40 | 16.03 |  2.60 |  2.71 |
-        //
-        //     * without IsBlittable check
-        //     => 6x faster!
-        /// <summary>
-        /// Copies blittable type to buffer
-        /// <para>
-        ///     This is extremely fast, but only works for blittable types.
-        /// </para>
-        /// <para>
-        ///     Note:
-        ///     WriteBlittable assumes same endianness for server and client.
-        ///     All Unity 2018+ platforms are little endian.<br/>
-        ///     => run NetworkWriterTests.BlittableOnThisPlatform() to verify!
-        /// </para>
-        /// </summary>
-        /// <remarks>
-        ///     See <see href="https://docs.microsoft.com/en-us/dotnet/framework/interop/blittable-and-non-blittable-types">Blittable and Non-Blittable Types</see>
-        ///     for more info.
-        /// </remarks>
-        /// <typeparam name="T">Needs to be unmanaged, see <see href="https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/unmanaged-types">unmanaged types</see></typeparam>
-        /// <param name="value"></param>
-        public unsafe void WriteBlittable<T>(T value)
-            where T : unmanaged
+        public void WriteByte(byte value)
         {
-            // check if blittable for safety
-#if UNITY_EDITOR
-            if (!UnsafeUtility.IsBlittable(typeof(T)))
-            {
-                Debug.LogError(typeof(T) + " is not blittable!");
-                return;
-            }
-#endif
-            // calculate size
-            //   sizeof(T) gets the managed size at compile time.
-            //   Marshal.SizeOf<T> gets the unmanaged size at runtime (slow).
-            // => our 1mio writes benchmark is 6x slower with Marshal.SizeOf<T>
-            // => for blittable types, sizeof(T) is even recommended:
-            // https://docs.microsoft.com/en-us/dotnet/standard/native-interop/best-practices
-            int size = sizeof(T);
-
-            // ensure length
-            EnsureLength(position + size);
-
-            // write blittable
-            fixed (byte* ptr = &buffer[Position])
-            {
-                // cast buffer to T* pointer, then assign value to the area
-                *(T*)ptr = value;
-            }
-            Position += size;
+            EnsureCapacity(Position + 1);
+            buffer[Position++] = value;
         }
 
-
-        /// <summary>
-        /// Copys bytes from given array to <see cref="buffer"/>
-        /// <para>
-        ///     useful for byte arrays with consistent size, where the reader knows how many to read
-        ///     (like a packet opcode that's always the same)
-        /// </para>
-        /// </summary>
-        /// <param name="buffer"></param>
-        /// <param name="offset"></param>
-        /// <param name="count"></param>
+        // for byte arrays with consistent size, where the reader knows how many to read
+        // (like a packet opcode that's always the same)
         public void WriteBytes(byte[] buffer, int offset, int count)
         {
-            EnsureLength(position + count);
-            Array.ConstrainedCopy(buffer, offset, this.buffer, position, count);
-            position += count;
+            EnsureCapacity(Position + count);
+            Array.ConstrainedCopy(buffer, offset, this.buffer, Position, count);
+            Position += count;
         }
 
-        /// <summary>
-        /// Writes any type that mirror supports
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="value"></param>
+        /// <summary>Writes any type that mirror supports. Uses weaver populated Writer(T).write.</summary>
         public void Write<T>(T value)
         {
             Action<NetworkWriter, T> writeDelegate = Writer<T>.write;
             if (writeDelegate == null)
             {
-                logger.LogError($"No writer found for {typeof(T)}. Use a type supported by Mirror or define a custom writer");
+                Debug.LogError($"No writer found for {typeof(T)}. Use a type supported by Mirror or define a custom writer");
             }
             else
             {
@@ -244,36 +89,110 @@ namespace Mirror
         }
     }
 
-
-    /// <summary>
-    /// Built in Writer functions for Mirror
-    /// <para>
-    ///     Weaver automatically decects all extension methods for NetworkWriter 
-    /// </para>
-    /// </summary>
+    // Mirror's Weaver automatically detects all NetworkWriter function types,
+    // but they do all need to be extensions.
     public static class NetworkWriterExtensions
     {
-        static readonly ILogger logger = LogFactory.GetLogger(typeof(NetworkWriterExtensions));
-
         // cache encoding instead of creating it with BinaryWriter each time
         // 1000 readers before:  1MB GC, 30ms
         // 1000 readers after: 0.8MB GC, 18ms
         static readonly UTF8Encoding encoding = new UTF8Encoding(false, true);
         static readonly byte[] stringBuffer = new byte[NetworkWriter.MaxStringLength];
 
-        public static void WriteByte(this NetworkWriter writer, byte value) => writer.WriteBlittable(value);
-        public static void WriteSByte(this NetworkWriter writer, sbyte value) => writer.WriteBlittable(value);
-        public static void WriteChar(this NetworkWriter writer, char value) => writer.WriteBlittable((short)value); // char isn't blittable
-        public static void WriteBoolean(this NetworkWriter writer, bool value) => writer.WriteBlittable((byte)(value ? 1 : 0)); // bool isn't blittable
-        public static void WriteUInt16(this NetworkWriter writer, ushort value) => writer.WriteBlittable(value);
-        public static void WriteInt16(this NetworkWriter writer, short value) => writer.WriteUInt16((ushort)value);
-        public static void WriteUInt32(this NetworkWriter writer, uint value) => writer.WriteBlittable(value);
-        public static void WriteInt32(this NetworkWriter writer, int value) => writer.WriteBlittable(value);
-        public static void WriteUInt64(this NetworkWriter writer, ulong value) => writer.WriteBlittable(value);
-        public static void WriteInt64(this NetworkWriter writer, long value) => writer.WriteBlittable(value);
-        public static void WriteSingle(this NetworkWriter writer, float value) => writer.WriteBlittable(value);
-        public static void WriteDouble(this NetworkWriter writer, double value) => writer.WriteBlittable(value);
-        public static void WriteDecimal(this NetworkWriter writer, decimal value) => writer.WriteBlittable(value);
+        public static void WriteByte(this NetworkWriter writer, byte value) => writer.WriteByte(value);
+
+        public static void WriteSByte(this NetworkWriter writer, sbyte value) => writer.WriteByte((byte)value);
+
+        public static void WriteChar(this NetworkWriter writer, char value) => writer.WriteUShort(value);
+
+        // Deprecated 2021-05-18
+        [Obsolete("We've cleaned up the API. Use WriteBool instead.")]
+        public static void WriteBoolean(this NetworkWriter writer, bool value) => writer.WriteBool(value);
+        public static void WriteBool(this NetworkWriter writer, bool value) => writer.WriteByte((byte)(value ? 1 : 0));
+
+        // Deprecated 2021-05-18
+        [Obsolete("We've cleaned up the API. Use WriteUShort instead.")]
+        public static void WriteUInt16(this NetworkWriter writer, ushort value) => writer.WriteUShort(value);
+        public static void WriteUShort(this NetworkWriter writer, ushort value)
+        {
+            writer.WriteByte((byte)value);
+            writer.WriteByte((byte)(value >> 8));
+        }
+
+        // Deprecated 2021-05-18
+        [Obsolete("We've cleaned up the API. Use WriteShort instead.")]
+        public static void WriteInt16(this NetworkWriter writer, short value) => writer.WriteShort(value);
+        public static void WriteShort(this NetworkWriter writer, short value) => writer.WriteUShort((ushort)value);
+
+        // Deprecated 2021-05-18
+        [Obsolete("We've cleaned up the API. Use WriteUInt instead.")]
+        public static void WriteUInt32(this NetworkWriter writer, uint value) => writer.WriteUInt(value);
+        public static void WriteUInt(this NetworkWriter writer, uint value)
+        {
+            writer.WriteByte((byte)value);
+            writer.WriteByte((byte)(value >> 8));
+            writer.WriteByte((byte)(value >> 16));
+            writer.WriteByte((byte)(value >> 24));
+        }
+
+        // Deprecated 2021-05-18
+        [Obsolete("We've cleaned up the API. Use WriteInt instead.")]
+        public static void WriteInt32(this NetworkWriter writer, int value) => writer.WriteInt(value);
+        public static void WriteInt(this NetworkWriter writer, int value) => writer.WriteUInt((uint)value);
+
+        // Deprecated 2021-05-18
+        [Obsolete("We've cleaned up the API. Use WriteULong instead.")]
+        public static void WriteUInt64(this NetworkWriter writer, ulong value) => writer.WriteULong(value);
+        public static void WriteULong(this NetworkWriter writer, ulong value)
+        {
+            writer.WriteByte((byte)value);
+            writer.WriteByte((byte)(value >> 8));
+            writer.WriteByte((byte)(value >> 16));
+            writer.WriteByte((byte)(value >> 24));
+            writer.WriteByte((byte)(value >> 32));
+            writer.WriteByte((byte)(value >> 40));
+            writer.WriteByte((byte)(value >> 48));
+            writer.WriteByte((byte)(value >> 56));
+        }
+
+        // Deprecated 2021-05-18
+        [Obsolete("We've cleaned up the API. Use WriteLong instead.")]
+        public static void WriteInt64(this NetworkWriter writer, long value) => writer.WriteLong(value);
+        public static void WriteLong(this NetworkWriter writer, long value) => writer.WriteULong((ulong)value);
+
+        // Deprecated 2021-05-18
+        [Obsolete("We've cleaned up the API. Use WriteFloat instead.")]
+        public static void WriteSingle(this NetworkWriter writer, float value) => writer.WriteFloat(value);
+        public static void WriteFloat(this NetworkWriter writer, float value)
+        {
+            UIntFloat converter = new UIntFloat
+            {
+                floatValue = value
+            };
+            writer.WriteUInt(converter.intValue);
+        }
+
+        public static void WriteDouble(this NetworkWriter writer, double value)
+        {
+            UIntDouble converter = new UIntDouble
+            {
+                doubleValue = value
+            };
+            writer.WriteULong(converter.longValue);
+        }
+
+        public static void WriteDecimal(this NetworkWriter writer, decimal value)
+        {
+            // the only way to read it without allocations is to both read and
+            // write it with the FloatConverter (which is not binary compatible
+            // to writer.Write(decimal), hence why we use it here too)
+            UIntDecimal converter = new UIntDecimal
+            {
+                decimalValue = value
+            };
+            writer.WriteULong(converter.longValue1);
+            writer.WriteULong(converter.longValue2);
+        }
 
         public static void WriteString(this NetworkWriter writer, string value)
         {
@@ -283,7 +202,7 @@ namespace Mirror
             //        on the client)
             if (value == null)
             {
-                writer.WriteUInt16(0);
+                writer.WriteUShort(0);
                 return;
             }
 
@@ -298,7 +217,7 @@ namespace Mirror
             }
 
             // write size and bytes
-            writer.WriteUInt16(checked((ushort)(size + 1)));
+            writer.WriteUShort(checked((ushort)(size + 1)));
             writer.WriteBytes(stringBuffer, 0, size);
         }
 
@@ -307,14 +226,14 @@ namespace Mirror
         public static void WriteBytesAndSize(this NetworkWriter writer, byte[] buffer, int offset, int count)
         {
             // null is supported because [SyncVar]s might be structs with null byte[] arrays
-            // write 0 for null array, increment normal size by 1 to save bandwith
+            // write 0 for null array, increment normal size by 1 to save bandwidth
             // (using size=-1 for null would limit max size to 32kb instead of 64kb)
             if (buffer == null)
             {
-                writer.WriteUInt32(0u);
+                writer.WriteUInt(0u);
                 return;
             }
-            writer.WriteUInt32(checked((uint)count) + 1u);
+            writer.WriteUInt(checked((uint)count) + 1u);
             writer.WriteBytes(buffer, offset, count);
         }
 
@@ -331,18 +250,103 @@ namespace Mirror
             writer.WriteBytesAndSize(buffer.Array, buffer.Offset, buffer.Count);
         }
 
-        public static void WriteVector2(this NetworkWriter writer, Vector2 value) => writer.WriteBlittable(value);
-        public static void WriteVector3(this NetworkWriter writer, Vector3 value) => writer.WriteBlittable(value);
-        public static void WriteVector4(this NetworkWriter writer, Vector4 value) => writer.WriteBlittable(value);
-        public static void WriteVector2Int(this NetworkWriter writer, Vector2Int value) => writer.WriteBlittable(value);
-        public static void WriteVector3Int(this NetworkWriter writer, Vector3Int value) => writer.WriteBlittable(value);
-        public static void WriteColor(this NetworkWriter writer, Color value) => writer.WriteBlittable(value);
-        public static void WriteColor32(this NetworkWriter writer, Color32 value) => writer.WriteBlittable(value);
-        public static void WriteQuaternion(this NetworkWriter writer, Quaternion value) => writer.WriteBlittable(value);
-        public static void WriteRect(this NetworkWriter writer, Rect value) => writer.WriteBlittable(value);
-        public static void WritePlane(this NetworkWriter writer, Plane value) => writer.WriteBlittable(value);
-        public static void WriteRay(this NetworkWriter writer, Ray value) => writer.WriteBlittable(value);
-        public static void WriteMatrix4x4(this NetworkWriter writer, Matrix4x4 value) => writer.WriteBlittable(value);
+        public static void WriteVector2(this NetworkWriter writer, Vector2 value)
+        {
+            writer.WriteFloat(value.x);
+            writer.WriteFloat(value.y);
+        }
+
+        public static void WriteVector3(this NetworkWriter writer, Vector3 value)
+        {
+            writer.WriteFloat(value.x);
+            writer.WriteFloat(value.y);
+            writer.WriteFloat(value.z);
+        }
+
+        public static void WriteVector4(this NetworkWriter writer, Vector4 value)
+        {
+            writer.WriteFloat(value.x);
+            writer.WriteFloat(value.y);
+            writer.WriteFloat(value.z);
+            writer.WriteFloat(value.w);
+        }
+
+        public static void WriteVector2Int(this NetworkWriter writer, Vector2Int value)
+        {
+            writer.WriteInt(value.x);
+            writer.WriteInt(value.y);
+        }
+
+        public static void WriteVector3Int(this NetworkWriter writer, Vector3Int value)
+        {
+            writer.WriteInt(value.x);
+            writer.WriteInt(value.y);
+            writer.WriteInt(value.z);
+        }
+
+        public static void WriteColor(this NetworkWriter writer, Color value)
+        {
+            writer.WriteFloat(value.r);
+            writer.WriteFloat(value.g);
+            writer.WriteFloat(value.b);
+            writer.WriteFloat(value.a);
+        }
+
+        public static void WriteColor32(this NetworkWriter writer, Color32 value)
+        {
+            writer.WriteByte(value.r);
+            writer.WriteByte(value.g);
+            writer.WriteByte(value.b);
+            writer.WriteByte(value.a);
+        }
+
+        public static void WriteQuaternion(this NetworkWriter writer, Quaternion value)
+        {
+            writer.WriteFloat(value.x);
+            writer.WriteFloat(value.y);
+            writer.WriteFloat(value.z);
+            writer.WriteFloat(value.w);
+        }
+
+        public static void WriteRect(this NetworkWriter writer, Rect value)
+        {
+            writer.WriteFloat(value.xMin);
+            writer.WriteFloat(value.yMin);
+            writer.WriteFloat(value.width);
+            writer.WriteFloat(value.height);
+        }
+
+        public static void WritePlane(this NetworkWriter writer, Plane value)
+        {
+            writer.WriteVector3(value.normal);
+            writer.WriteFloat(value.distance);
+        }
+
+        public static void WriteRay(this NetworkWriter writer, Ray value)
+        {
+            writer.WriteVector3(value.origin);
+            writer.WriteVector3(value.direction);
+        }
+
+        public static void WriteMatrix4x4(this NetworkWriter writer, Matrix4x4 value)
+        {
+            writer.WriteFloat(value.m00);
+            writer.WriteFloat(value.m01);
+            writer.WriteFloat(value.m02);
+            writer.WriteFloat(value.m03);
+            writer.WriteFloat(value.m10);
+            writer.WriteFloat(value.m11);
+            writer.WriteFloat(value.m12);
+            writer.WriteFloat(value.m13);
+            writer.WriteFloat(value.m20);
+            writer.WriteFloat(value.m21);
+            writer.WriteFloat(value.m22);
+            writer.WriteFloat(value.m23);
+            writer.WriteFloat(value.m30);
+            writer.WriteFloat(value.m31);
+            writer.WriteFloat(value.m32);
+            writer.WriteFloat(value.m33);
+        }
 
         public static void WriteGuid(this NetworkWriter writer, Guid value)
         {
@@ -354,20 +358,20 @@ namespace Mirror
         {
             if (value == null)
             {
-                writer.WriteUInt32(0);
+                writer.WriteUInt(0);
                 return;
             }
-            writer.WriteUInt32(value.netId);
+            writer.WriteUInt(value.netId);
         }
 
         public static void WriteNetworkBehaviour(this NetworkWriter writer, NetworkBehaviour value)
         {
             if (value == null)
             {
-                writer.WriteUInt32(0);
+                writer.WriteUInt(0);
                 return;
             }
-            writer.WriteUInt32(value.netId);
+            writer.WriteUInt(value.netId);
             writer.WriteByte((byte)value.ComponentIndex);
         }
 
@@ -375,18 +379,18 @@ namespace Mirror
         {
             if (value == null)
             {
-                writer.WriteUInt32(0);
+                writer.WriteUInt(0);
                 return;
             }
             NetworkIdentity identity = value.GetComponent<NetworkIdentity>();
             if (identity != null)
             {
-                writer.WriteUInt32(identity.netId);
+                writer.WriteUInt(identity.netId);
             }
             else
             {
-                logger.LogWarning("NetworkWriter " + value + " has no NetworkIdentity");
-                writer.WriteUInt32(0);
+                Debug.LogWarning("NetworkWriter " + value + " has no NetworkIdentity");
+                writer.WriteUInt(0);
             }
         }
 
@@ -394,34 +398,34 @@ namespace Mirror
         {
             if (value == null)
             {
-                writer.WriteUInt32(0);
+                writer.WriteUInt(0);
                 return;
             }
             NetworkIdentity identity = value.GetComponent<NetworkIdentity>();
             if (identity != null)
             {
-                writer.WriteUInt32(identity.netId);
+                writer.WriteUInt(identity.netId);
             }
             else
             {
-                logger.LogWarning("NetworkWriter " + value + " has no NetworkIdentity");
-                writer.WriteUInt32(0);
+                Debug.LogWarning("NetworkWriter " + value + " has no NetworkIdentity");
+                writer.WriteUInt(0);
             }
         }
 
         public static void WriteUri(this NetworkWriter writer, Uri uri)
         {
-            writer.WriteString(uri.ToString());
+            writer.WriteString(uri?.ToString());
         }
 
         public static void WriteList<T>(this NetworkWriter writer, List<T> list)
         {
             if (list is null)
             {
-                writer.WriteInt32(-1);
+                writer.WriteInt(-1);
                 return;
             }
-            writer.WriteInt32(list.Count);
+            writer.WriteInt(list.Count);
             for (int i = 0; i < list.Count; i++)
                 writer.Write(list[i]);
         }
@@ -430,10 +434,10 @@ namespace Mirror
         {
             if (array is null)
             {
-                writer.WriteInt32(-1);
+                writer.WriteInt(-1);
                 return;
             }
-            writer.WriteInt32(array.Length);
+            writer.WriteInt(array.Length);
             for (int i = 0; i < array.Length; i++)
                 writer.Write(array[i]);
         }
@@ -441,7 +445,7 @@ namespace Mirror
         public static void WriteArraySegment<T>(this NetworkWriter writer, ArraySegment<T> segment)
         {
             int length = segment.Count;
-            writer.WriteInt32(length);
+            writer.WriteInt(length);
             for (int i = 0; i < length; i++)
             {
                 writer.Write(segment.Array[segment.Offset + i]);

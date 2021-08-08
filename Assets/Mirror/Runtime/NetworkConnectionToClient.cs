@@ -1,37 +1,35 @@
 using System;
-using UnityEngine;
 
 namespace Mirror
 {
     public class NetworkConnectionToClient : NetworkConnection
     {
-        static readonly ILogger logger = LogFactory.GetLogger<NetworkConnectionToClient>();
+        public override string address =>
+            Transport.activeTransport.ServerGetClientAddress(connectionId);
 
-        public NetworkConnectionToClient(int networkConnectionId) : base(networkConnectionId) { }
+        // unbatcher
+        public Unbatcher unbatcher = new Unbatcher();
 
-        public override string address => Transport.activeTransport.ServerGetClientAddress(connectionId);
+        public NetworkConnectionToClient(int networkConnectionId)
+            : base(networkConnectionId) {}
 
-        internal override void Send(ArraySegment<byte> segment, int channelId = Channels.DefaultReliable)
-        {
-            if (logger.LogEnabled()) logger.Log("ConnectionSend " + this + " bytes:" + BitConverter.ToString(segment.Array, segment.Offset, segment.Count));
+        // Send stage three: hand off to transport
+        protected override void SendToTransport(ArraySegment<byte> segment, int channelId = Channels.Reliable) =>
+            Transport.activeTransport.ServerSend(connectionId, segment, channelId);
 
-            // validate packet size first.
-            if (ValidatePacketSize(segment, channelId))
-            {
-                Transport.activeTransport.ServerSend(connectionId, channelId, segment);
-            }
-        }
-
-        /// <summary>
-        /// Disconnects this connection.
-        /// </summary>
+        /// <summary>Disconnects this connection.</summary>
         public override void Disconnect()
         {
             // set not ready and handle clientscene disconnect in any case
             // (might be client or host mode here)
             isReady = false;
             Transport.activeTransport.ServerDisconnect(connectionId);
-            RemoveObservers();
+
+            // IMPORTANT: NetworkConnection.Disconnect() is NOT called for
+            // voluntary disconnects from the other end.
+            // -> so all 'on disconnect' cleanup code needs to be in
+            //    OnTransportDisconnect, where it's called for both voluntary
+            //    and involuntary disconnects!
         }
     }
 }

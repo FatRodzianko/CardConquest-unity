@@ -6,6 +6,7 @@ using System.Linq;
 
 public class UnitScript : NetworkBehaviour
 {
+    public NetworkBehaviour[] NetworkBehaviours { get; private set; } = new NetworkBehaviour[] { };
     [Header("Player Owner info")]
     [SyncVar] public string ownerPlayerName;
     [SyncVar] public int ownerConnectionId;
