@@ -12,6 +12,7 @@ public class LobbyPlayer : NetworkBehaviour
     [SyncVar(hook = nameof(HandlePlayerNameUpdate))] public string PlayerName;
     [SyncVar] public int ConnectionId;
     [SyncVar] public int playerNumber;
+    [SyncVar] public ulong playerSteamId;
     [Header("Game Info")]
     [SyncVar] public bool IsGameLeader = false;
     [SyncVar(hook = nameof(HandlePlayerReadyStatusChange))] public bool isPlayerReady;

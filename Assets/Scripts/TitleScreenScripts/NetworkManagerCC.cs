@@ -5,6 +5,7 @@ using Mirror;
 using System;
 using System.Linq;
 using UnityEngine.SceneManagement;
+using Steamworks;
 
 public class NetworkManagerCC : NetworkManager
 {
@@ -73,6 +74,7 @@ public class NetworkManagerCC : NetworkManager
             lobbyPlayerInstance.IsGameLeader = isGameLeader;
             lobbyPlayerInstance.ConnectionId = conn.connectionId;
             lobbyPlayerInstance.playerNumber = LobbyPlayers.Count + 1;
+            lobbyPlayerInstance.playerSteamId = (ulong)SteamMatchmaking.GetLobbyMemberByIndex((CSteamID)SteamLobby.instance.current_lobbyID, LobbyPlayers.Count);
 
             NetworkServer.AddPlayerForConnection(conn, lobbyPlayerInstance.gameObject);
             Debug.Log("Player added. Player name: " + lobbyPlayerInstance.PlayerName + ". Player connection id: " + lobbyPlayerInstance.ConnectionId.ToString());
@@ -117,6 +119,7 @@ public class NetworkManagerCC : NetworkManager
                 gamePlayerInstance.SetConnectionId(LobbyPlayers[i].ConnectionId);
                 gamePlayerInstance.SetPlayerNumber(LobbyPlayers[i].playerNumber);
                 gamePlayerInstance.SetPlayerNameOfCommander(LobbyPlayers[i].nameOfCommanderSelected);
+                gamePlayerInstance.playerSteamId = LobbyPlayers[i].playerSteamId;
 
                 NetworkServer.Destroy(conn.identity.gameObject);
                 NetworkServer.ReplacePlayerForConnection(conn, gamePlayerInstance.gameObject, true);

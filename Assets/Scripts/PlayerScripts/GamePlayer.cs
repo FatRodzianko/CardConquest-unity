@@ -12,6 +12,7 @@ public class GamePlayer : NetworkBehaviour
     [SyncVar] public int ConnectionId;
     [SyncVar] public int playerNumber;
     [SyncVar] public string nameOfCommander;
+    [SyncVar] public ulong playerSteamId;
     public ulong currentLobbyId;
 
     [Header("Player Unit Prefabs")]
