@@ -13,10 +13,9 @@ To get connections to work over LAN, you may need to disable windows firewall. I
 ## Current features implemented
 * Reinforcements for battles
 * Special Abilities for Cards
+* Multiplayer through Steamworks so you don't have to do port forwarding any more
 
 ## Features that may be added someday if I ever stop being lazy
-* Different decks/cards – players have the same cards right now. I’d like for there to be at least two different card sets so players kind of play differently based on what cards they have. The cards would have different powers, attack/defense values, and different abilities (if I ever add those)
-* Allow players to choose from multiple player types/card deck types – After I’ve added at least two card decks, maybe I will create more and also allow the players to “pick” which deck they want while they are in the lobby. Basically, character selection that affects what cards you have in the game
 * More than 2 players…
 * Different maps to choose from
 * Camera controls for larger maps or with more players
