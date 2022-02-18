@@ -760,7 +760,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   Channels: 0200000001000000
   Timeout: 25
-  SteamAppID: 480
+  SteamAppID: 1821800
   AllowSteamRelay: 1
   UseNextGenSteamNetworking: 1
   SteamUserID: 0
